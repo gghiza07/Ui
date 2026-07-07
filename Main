@@ -1114,7 +1114,6 @@ function ui:CreateTab(name)
                 for _, btn in pairs(optButtons) do btn.Visible = true end
                 resizeDropdown()
                 updateMainLabel("▲")
-                searchBox:CaptureFocus() 
             else
                 row.Size = UDim2.new(1, -6, 0, 44)
                 updateMainLabel("▼")
