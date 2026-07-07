@@ -1,0 +1,919 @@
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local ui = {
+    flags = {},
+    _internal = {
+        tabList = nil,
+        pages = nil,
+        theme = nil,
+        selectedButton = nil,
+        selectedPage = nil,
+        config = nil
+    }
+}
+
+-- ==================== CreateWindow ====================
+function ui:CreateWindow(options)
+    options = options or {}
+    
+    local config = {
+        Name = options.Name or "Wiv",
+        MapName = options.Map or "Unknown Map",
+        LogoText = options.Text or "",
+        Width = 0.36,
+        Height = 0.62,
+        SaveConfig = true,
+        SaveFolder = "settingsUi",
+        SaveFile = sanitizeFilename(MapName) .. ".json",
+        ToggleKey = Enum.KeyCode.LeftControl,
+        Theme = {
+            Primary = Color3.fromRGB(14, 16, 20),
+            Accent = Color3.fromRGB(84, 240, 255),
+            Accent2 = Color3.fromRGB(150, 80, 255),
+            Text = Color3.fromRGB(230, 230, 230),
+            Sub = Color3.fromRGB(26, 28, 32)
+        }
+    }
+    
+    if options.Save then
+        config.SaveConfig = options.Save.SaveConfig ~= nil and options.Save.SaveConfig or config.SaveConfig
+        config.SaveFolder = options.Save.SaveFolder or config.SaveFolder
+        config.SaveFile = (options.Save.SaveFile and options.Save.SaveFile ~= "") and options.Save.SaveFile or config.SaveFile
+    end
+    
+    if options.Key and options.Key.ToggleKey then
+        config.ToggleKey = options.Key.ToggleKey
+    end
+
+    ui._internal.config = config
+    ui._internal.theme = config.Theme
+    
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = config.Name .. "_Gui"
+    screenGui.Parent = CoreGui
+    screenGui.DisplayOrder = 1000
+    screenGui.IgnoreGuiInset = true
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+
+    local frame = Instance.new("CanvasGroup")
+    frame.Name = "MainFrame"
+    frame.Size = UDim2.new(config.Width, 0, config.Height, 0)
+    frame.Position = UDim2.new((1 - config.Width)/2, 0, (1 - config.Height)/2, 0)
+    frame.BackgroundColor3 = config.Theme.Primary
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Parent = screenGui
+    frame.ClipsDescendants = true
+    frame.GroupTransparency = 0
+
+    local uiScale = Instance.new("UIScale")
+    uiScale.Scale = 1
+    uiScale.Parent = frame
+
+    local modalBtn = Instance.new("TextButton")
+    modalBtn.Name = "ModalBypass"
+    modalBtn.Size = UDim2.new(0, 0, 0, 0)
+    modalBtn.BackgroundTransparency = 1
+    modalBtn.Text = ""
+    modalBtn.Visible = true
+    modalBtn.Modal = false
+    modalBtn.Parent = frame
+
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 14)
+    frameCorner.Parent = frame
+
+    local frame2 = Instance.new("Frame")
+    frame2.Name = "ContainerFrame"
+    frame2.Size = UDim2.new(1, -12, 1, -12)
+    frame2.Position = UDim2.new(0, 6, 0, 6)
+    frame2.BackgroundTransparency = 1
+    frame2.BorderSizePixel = 0
+    frame2.Parent = frame
+
+    local frame2Corner = Instance.new("UICorner")
+    frame2Corner.CornerRadius = UDim.new(0, 12)
+    frame2Corner.Parent = frame2
+
+    local background = Instance.new("ImageLabel")
+    background.Name = "Background"
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundTransparency = 1
+    background.Parent = frame2
+
+    local bgGradient = Instance.new("UIGradient")
+    bgGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, config.Theme.Primary),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 14))
+    }
+    bgGradient.Rotation = 90
+    bgGradient.Parent = frame2
+
+    local main = Instance.new("Frame")
+    main.Name = "TopHeader"
+    main.Size = UDim2.new(1, 0, 0, 44)
+    main.Position = UDim2.new(0, 0, 0, 0)
+    main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    main.BackgroundTransparency = 0.94
+    main.BorderSizePixel = 0
+    main.Active = true
+    main.ZIndex = 100
+    main.Parent = frame2
+
+    local mainCorner = Instance.new("UICorner")
+    mainCorner.CornerRadius = UDim.new(0, 12)
+    mainCorner.Parent = main
+
+    local mainAccent = Instance.new("Frame")
+    mainAccent.Size = UDim2.new(1, 0, 0, 4)
+    mainAccent.Position = UDim2.new(0, 0, 1, -4)
+    mainAccent.BackgroundColor3 = config.Theme.Accent
+    mainAccent.BorderSizePixel = 0
+    mainAccent.ZIndex = 101
+    mainAccent.Parent = main
+
+    local mainAccent2 = Instance.new("UIGradient")
+    mainAccent2.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, config.Theme.Accent2),
+        ColorSequenceKeypoint.new(1, config.Theme.Accent)
+    }
+    mainAccent2.Parent = mainAccent
+
+    local leftHeaderContainer = Instance.new("Frame")
+    leftHeaderContainer.Name = "LeftHeader"
+    leftHeaderContainer.Size = UDim2.new(0.6, -12, 1, 0)
+    leftHeaderContainer.Position = UDim2.new(0, 12, 0, -3) 
+    leftHeaderContainer.BackgroundTransparency = 1
+    leftHeaderContainer.ZIndex = 102
+    leftHeaderContainer.Parent = main
+
+    local leftHeaderLayout = Instance.new("UIListLayout")
+    leftHeaderLayout.FillDirection = Enum.FillDirection.Horizontal
+    leftHeaderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    leftHeaderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    leftHeaderLayout.Padding = UDim.new(0, 8)
+    leftHeaderLayout.Parent = leftHeaderContainer
+
+    local minBtn = Instance.new("TextButton")
+    minBtn.Name = "MinimizeButton"
+    minBtn.Size = UDim2.new(0, 24, 0, 24)
+    minBtn.BackgroundColor3 = Color3.fromRGB(26, 28, 32)
+    minBtn.Text = "—"
+    minBtn.Font = Enum.Font.GothamBold
+    minBtn.TextSize = 12
+    minBtn.TextColor3 = config.Theme.Text
+    minBtn.LayoutOrder = 1
+    minBtn.ZIndex = 103
+    minBtn.Parent = leftHeaderContainer
+    Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
+
+    local titleAndMapFrame = Instance.new("Frame")
+    titleAndMapFrame.Name = "TitleAndMapFrame"
+    titleAndMapFrame.Size = UDim2.new(0, 0, 1, 0)
+    titleAndMapFrame.AutomaticSize = Enum.AutomaticSize.X
+    titleAndMapFrame.BackgroundTransparency = 1
+    titleAndMapFrame.LayoutOrder = 2
+    titleAndMapFrame.ZIndex = 103
+    titleAndMapFrame.Parent = leftHeaderContainer
+
+    local titleAndMapLayout = Instance.new("UIListLayout")
+    titleAndMapLayout.FillDirection = Enum.FillDirection.Vertical
+    titleAndMapLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    titleAndMapLayout.Padding = UDim.new(0, -1)
+    titleAndMapLayout.Parent = titleAndMapFrame
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(0, 0, 0, 16)
+    title.AutomaticSize = Enum.AutomaticSize.X
+    title.BackgroundTransparency = 1
+    title.Text = config.Name
+    title.TextColor3 = config.Theme.Text
+    title.TextSize = 15
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.ZIndex = 104
+    title.Parent = titleAndMapFrame
+
+    local mapLabel = Instance.new("TextLabel")
+    mapLabel.Name = "MapLabel"
+    mapLabel.Size = UDim2.new(0, 0, 0, 12)
+    mapLabel.AutomaticSize = Enum.AutomaticSize.X
+    mapLabel.BackgroundTransparency = 1
+    mapLabel.Text = config.MapName
+    mapLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+    mapLabel.TextSize = 10
+    mapLabel.Font = Enum.Font.GothamSemibold
+    mapLabel.TextXAlignment = Enum.TextXAlignment.Left
+    mapLabel.ZIndex = 104
+    mapLabel.Parent = titleAndMapFrame
+
+    local pingLabel = Instance.new("TextLabel")
+    pingLabel.Name = "PingLabel"
+    pingLabel.Size = UDim2.new(0, 0, 1, 0)
+    pingLabel.AutomaticSize = Enum.AutomaticSize.X
+    pingLabel.BackgroundTransparency = 1
+    pingLabel.Font = Enum.Font.Code
+    pingLabel.TextSize = 10
+    pingLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+    pingLabel.TextXAlignment = Enum.TextXAlignment.Left
+    pingLabel.LayoutOrder = 3
+    pingLabel.ZIndex = 103
+    pingLabel.Parent = leftHeaderContainer
+
+    local fpsLabel = Instance.new("TextLabel")
+    fpsLabel.Name = "FpsLabel"
+    fpsLabel.Size = UDim2.new(0, 0, 1, 0)
+    fpsLabel.AutomaticSize = Enum.AutomaticSize.X
+    fpsLabel.BackgroundTransparency = 1
+    fpsLabel.Font = Enum.Font.Code
+    fpsLabel.TextSize = 10
+    fpsLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+    fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    fpsLabel.LayoutOrder = 4
+    fpsLabel.ZIndex = 103
+    fpsLabel.Parent = leftHeaderContainer
+
+    local playersLabel = Instance.new("TextLabel")
+    playersLabel.Name = "PlayersLabel"
+    playersLabel.Size = UDim2.new(0, 0, 1, 0)
+    playersLabel.AutomaticSize = Enum.AutomaticSize.X
+    playersLabel.BackgroundTransparency = 1
+    playersLabel.Font = Enum.Font.Code
+    playersLabel.TextSize = 10
+    playersLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+    playersLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playersLabel.LayoutOrder = 5
+    playersLabel.ZIndex = 103
+    playersLabel.Parent = leftHeaderContainer
+
+    local rightHeaderContainer = Instance.new("Frame")
+    rightHeaderContainer.Name = "RightHeader"
+    rightHeaderContainer.Size = UDim2.new(0.4, -12, 1, 0)
+    rightHeaderContainer.Position = UDim2.new(1, -12, 0, -3) 
+    rightHeaderContainer.AnchorPoint = Vector2.new(1, 0)
+    rightHeaderContainer.BackgroundTransparency = 1
+    rightHeaderContainer.ZIndex = 102
+    rightHeaderContainer.Parent = main
+
+    local rightHeaderLayout = Instance.new("UIListLayout")
+    rightHeaderLayout.FillDirection = Enum.FillDirection.Horizontal
+    rightHeaderLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    rightHeaderLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    rightHeaderLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rightHeaderLayout.Padding = UDim.new(0, 8)
+    rightHeaderLayout.Parent = rightHeaderContainer
+
+    local timerLabel = Instance.new("TextLabel")
+    timerLabel.Name = "UptimeTimer"
+    timerLabel.Size = UDim2.new(0, 0, 1, 0)
+    timerLabel.AutomaticSize = Enum.AutomaticSize.X
+    timerLabel.BackgroundTransparency = 1
+    timerLabel.Text = "⏱️ 00:00:00"
+    timerLabel.Font = Enum.Font.Code
+    timerLabel.TextSize = 11
+    timerLabel.TextColor3 = Color3.fromRGB(170, 170, 175)
+    timerLabel.TextXAlignment = Enum.TextXAlignment.Right
+    timerLabel.LayoutOrder = 1
+    timerLabel.ZIndex = 103
+    timerLabel.Parent = rightHeaderContainer
+
+    local logo = Instance.new("TextLabel")
+    logo.Name = "Logo"
+    logo.Size = UDim2.new(0, 0, 1, 0)
+    logo.AutomaticSize = Enum.AutomaticSize.X
+    logo.BackgroundTransparency = 1
+    logo.Text = config.LogoText
+    logo.Font = Enum.Font.GothamSemibold
+    logo.TextSize = 12
+    logo.TextColor3 = config.Theme.Accent
+    logo.TextXAlignment = Enum.TextXAlignment.Right
+    logo.LayoutOrder = 2
+    logo.ZIndex = 103
+    logo.Parent = rightHeaderContainer
+
+    local floatBtn = Instance.new("TextButton")
+    floatBtn.Name = "FloatingIcon"
+    floatBtn.Size = UDim2.new(0, 48, 0, 48)
+    floatBtn.Position = UDim2.new(0, 20, 0, 120) 
+    floatBtn.BackgroundColor3 = config.Theme.Primary
+    floatBtn.Text = "🕊️"
+    floatBtn.TextSize = 22
+    floatBtn.Visible = false
+    floatBtn.Active = true
+    floatBtn.ZIndex = 2000
+    floatBtn.Parent = screenGui
+    Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(1, 0)
+    local floatStroke = Instance.new("UIStroke", floatBtn)
+    floatStroke.Color = config.Theme.Accent
+    floatStroke.Thickness = 2
+
+    local TAB_WIDTH = 120
+    local tabList = Instance.new("ScrollingFrame")
+    tabList.Name = "TabsList"
+    tabList.Size = UDim2.new(0, TAB_WIDTH, 1, -56) 
+    tabList.Position = UDim2.new(0, 0, 0, 44)
+    tabList.BackgroundTransparency = 1
+    tabList.ScrollBarThickness = 0
+    tabList.ZIndex = 5
+    tabList.Parent = frame2
+
+    local tabsUIList = Instance.new("UIListLayout")
+    tabsUIList.Parent = tabList
+    tabsUIList.SortOrder = Enum.SortOrder.LayoutOrder
+    tabsUIList.Padding = UDim.new(0, 8)
+
+    local contentArea = Instance.new("Frame")
+    contentArea.Name = "ContentArea"
+    local contentOffset = TAB_WIDTH + 20
+    contentArea.Size = UDim2.new(1, -contentOffset, 1, -44)
+    contentArea.Position = UDim2.new(0, contentOffset, 0, 44)
+    contentArea.BackgroundTransparency = 1
+    contentArea.ZIndex = 5
+    contentArea.Parent = frame2
+
+    local pages = Instance.new("Folder")
+    pages.Name = "Pages"
+    pages.Parent = contentArea
+
+    ui._internal.tabList = tabList
+    ui._internal.pages = pages
+
+    -- ==================== Animation (Default is None) ====================
+    local isAnimating = false
+    local function toggleUI(visible)
+        if isAnimating then return end
+        local animStyle = "None"
+        if ui.flags["close_animation_style"] and ui.flags["close_animation_style"][1] then
+            animStyle = ui.flags["close_animation_style"][1]
+        end
+
+        if visible then
+            isAnimating = true
+            frame.Visible = true
+            
+            if animStyle == "Scale" then
+                frame.GroupTransparency = 0
+                uiScale.Scale = 0
+                local t = TweenService:Create(uiScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})
+                t:Play()
+                t.Completed:Connect(function() isAnimating = false end)
+            elseif animStyle == "Fade" then
+                uiScale.Scale = 1
+                frame.GroupTransparency = 1
+                local t = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = 0})
+                t:Play()
+                t.Completed:Connect(function() isAnimating = false end)
+            else
+                uiScale.Scale = 1
+                frame.GroupTransparency = 0
+                isAnimating = false
+            end
+        else
+            isAnimating = true
+            
+            if animStyle == "Scale" then
+                frame.GroupTransparency = 0
+                local t = TweenService:Create(uiScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+                t:Play()
+                t.Completed:Connect(function()
+                    frame.Visible = false
+                    isAnimating = false
+                end)
+            elseif animStyle == "Fade" then
+                uiScale.Scale = 1 
+                local t = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {GroupTransparency = 1})
+                t:Play()
+                t.Completed:Connect(function()
+                    frame.Visible = false
+                    isAnimating = false
+                end)
+            else
+                -- [Default] "None" ปิดการมองเห็นทันที
+                frame.Visible = false
+                isAnimating = false
+            end
+        end
+    end
+
+    minBtn.MouseButton1Click:Connect(function()
+        toggleUI(false)
+        floatBtn.Visible = true
+    end)
+
+    floatBtn.MouseButton1Click:Connect(function()
+        floatBtn.Visible = false
+        toggleUI(true)
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.KeyCode == config.ToggleKey then
+            toggleUI(not frame.Visible)
+        end
+    end)
+    
+    local dragging, lastInput, startDrag, startPos
+    main.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            lastInput = input
+            startDrag = input.Position
+            startPos = frame.Position
+            modalBtn.Modal = true
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input == lastInput then
+            local delta = input.Position - startDrag
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input == lastInput then
+            dragging = false
+            lastInput = nil
+            modalBtn.Modal = false
+            ui:SaveConfig()
+        end
+    end)
+   
+    local floatDragging, floatLastInput, floatStartDrag, floatStartPos
+    floatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            floatDragging = true
+            floatLastInput = input
+            floatStartDrag = input.Position
+            floatStartPos = floatBtn.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if floatDragging and input == floatLastInput then
+            local delta = input.Position - floatStartDrag
+            floatBtn.Position = UDim2.new(floatStartPos.X.Scale, floatStartPos.X.Offset + delta.X, floatStartPos.Y.Scale, floatStartPos.Y.Offset + delta.Y)
+        end
+    end)
+    floatBtn.InputEnded:Connect(function(input)
+        if input == floatLastInput then
+            floatDragging = false
+            floatLastInput = nil
+            ui:SaveConfig() 
+        end
+    end)
+
+    local grip = Instance.new("Frame")
+    grip.Name = "ResizeGrip"
+    grip.Size = UDim2.new(0, 18, 0, 18)
+    grip.AnchorPoint = Vector2.new(1, 1)
+    grip.Position = UDim2.new(1, -6, 1, -6)
+    grip.BackgroundColor3 = Color3.fromRGB(30, 30, 32)
+    grip.ZIndex = 10
+    grip.Parent = frame
+    Instance.new("UICorner", grip).CornerRadius = UDim.new(0, 6)
+
+    local resizing, resizeInput, resizeStart, startSize
+    local MIN_SIZE = Vector2.new(340, 220) 
+    local MAX_SIZE = Vector2.new(math.max(340, Camera.ViewportSize.X - 40), math.max(220, Camera.ViewportSize.Y - 40))
+
+    grip.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            resizeInput = input
+            resizeStart = input.Position
+            local absSize = frame.AbsoluteSize
+            startSize = Vector2.new(absSize.X, absSize.Y)
+            modalBtn.Modal = true
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input == resizeInput then
+            local delta = input.Position - resizeStart
+            local newW = math.clamp(startSize.X + delta.X, MIN_SIZE.X, MAX_SIZE.X)
+            local newH = math.clamp(startSize.Y + delta.Y, MIN_SIZE.Y, MAX_SIZE.Y)
+            frame.Size = UDim2.new(0, math.floor(newW), 0, math.floor(newH))
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input == resizeInput then
+            resizing = false
+            resizeInput = nil
+            modalBtn.Modal = false
+            ui:SaveConfig()
+        end
+    end)
+
+    -- ระบบ Anti-AFK เฝ้าจอ
+    LocalPlayer.Idled:Connect(function()
+        pcall(function()
+            VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
+            task.wait(0.5)
+            VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
+        end)
+    end)
+
+    -- รันลูปดึงข้อมูลเซิร์ฟเวอร์ (Ping, FPS, Players, Timer)
+    local startTime = os.time()
+    local fpsCount = 0
+    local lastFpsUpdate = os.clock()
+    local currentFps = 60
+
+    RunService.RenderStepped:Connect(function()
+        fpsCount = fpsCount + 1
+        if os.clock() - lastFpsUpdate >= 1 then
+            currentFps = fpsCount
+            fpsCount = 0
+            lastFpsUpdate = os.clock()
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            local elapsed = os.time() - startTime
+            local hours = math.floor(elapsed / 3600)
+            local minutes = math.floor((elapsed % 3600) / 60)
+            local seconds = elapsed % 60
+            timerLabel.Text = string.format("⏱️ %02d:%02d:%02d", hours, minutes, seconds)
+            
+            local ping = 0
+            pcall(function() ping = math.round(LocalPlayer:GetNetworkPing() * 1000) end)
+            pingLabel.Text = "(" .. tostring(ping) .. "ms)"
+            fpsLabel.Text = "• FPS: " .. tostring(currentFps)
+            playersLabel.Text = "• Plrs: " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers)
+            task.wait(1)
+        end
+    end)
+    
+    ui:LoadConfig()
+
+    local windowObj = {}
+    function windowObj:CreateTab(name)
+        return ui:CreateTab(name)
+    end
+    return windowObj
+end
+
+
+-- ==================== SAVE / LOAD CONFIG INTERNALS ====================
+function ui:SaveConfig()
+    local config = ui._internal.config
+    if not config or not config.SaveConfig then return end
+
+    local mainFrame = CoreGui:FindFirstChild(config.Name .. "_Gui") and CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+    local floatIcon = CoreGui:FindFirstChild(config.Name .. "_Gui") and CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
+    
+    if not mainFrame or not floatIcon then return end
+
+    local data = {
+        Pos = {mainFrame.Position.X.Scale, mainFrame.Position.X.Offset, mainFrame.Position.Y.Scale, mainFrame.Position.Y.Offset},
+        Size = {mainFrame.Size.X.Scale, mainFrame.Size.X.Offset, mainFrame.Size.Y.Scale, mainFrame.Size.Y.Offset},
+        FloatPos = {floatIcon.Position.X.Scale, floatIcon.Position.X.Offset, floatIcon.Position.Y.Scale, floatIcon.Position.Y.Offset},
+        Flags = ui.flags
+    }
+    
+    if writefile and makefolder then
+        pcall(function()
+            makefolder(config.SaveFolder)
+            writefile(config.SaveFolder .. "/" .. config.SaveFile, HttpService:JSONEncode(data))
+        end)
+    end
+end
+
+function ui:LoadConfig()
+    local config = ui._internal.config
+    if not config then return end
+
+    local filePath = config.SaveFolder .. "/" .. config.SaveFile
+    local mainFrame = CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+    local floatIcon = CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
+
+    if readfile and isfile and isfile(filePath) then
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(readfile(filePath))
+        end)
+        if success and result then
+            if result.Pos and mainFrame then
+                mainFrame.Position = UDim2.new(result.Pos[1], result.Pos[2], result.Pos[3], result.Pos[4])
+            end
+            if result.Size and mainFrame then
+                mainFrame.Size = UDim2.new(result.Size[1], result.Size[2], result.Size[3], result.Size[4])
+            end
+            if result.FloatPos and floatIcon then
+                floatIcon.Position = UDim2.new(result.FloatPos[1], result.FloatPos[2], result.FloatPos[3], result.FloatPos[4])
+            end
+            if result.Flags then
+                ui.flags = result.Flags
+            end
+        end
+    end
+    
+    if ui.flags["close_animation_style"] == nil then
+        ui.flags["close_animation_style"] = {"None"}
+    end
+end
+
+
+-- ==================== UI ELEMENTS ====================
+function ui:CreateTab(name)
+    local tabList = ui._internal.tabList
+    local pages = ui._internal.pages
+    local theme = ui._internal.theme
+    local tablistIndex = #tabList:GetChildren() + 1
+
+    local button = Instance.new("TextButton")
+    button.Name = "Tab_" .. name
+    button.Size = UDim2.new(1, 0, 0, 32)
+    button.BackgroundTransparency = 1
+    button.Text = name
+    button.TextSize = 14
+    button.TextColor3 = theme.Sub
+    button.Font = Enum.Font.GothamSemibold
+    button.LayoutOrder = tablistIndex
+    button.ZIndex = 6
+    button.Parent = tabList
+
+    local btncorner = Instance.new("UICorner")
+    btncorner.CornerRadius = UDim.new(0, 6)
+    btncorner.Parent = button
+
+    local btnbg = Instance.new("Frame")
+    btnbg.Name = "ButtonBackground"
+    btnbg.Size = UDim2.new(1, 0, 1, 0)
+    btnbg.BackgroundTransparency = 1
+    btnbg.BorderSizePixel = 0
+    btnbg.ZIndex = button.ZIndex - 1
+    btnbg.Parent = button
+    
+    local page = Instance.new("ScrollingFrame")
+    page.Name = name
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.ZIndex = 6
+    page.Parent = pages
+    page.Visible = false
+    page.ScrollBarThickness = 3
+    page.ScrollBarImageColor3 = theme.Accent
+    page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+    local pageLayout = Instance.new("UIListLayout")
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Padding = UDim.new(0, 6)
+    pageLayout.Parent = page
+
+    button.MouseButton1Click:Connect(function()
+        if ui._internal.selectedButton then
+            ui._internal.selectedButton.TextColor3 = theme.Sub
+            ui._internal.selectedButton.BackgroundTransparency = 1
+            if ui._internal.selectedPage then ui._internal.selectedPage.Visible = false end
+        end
+        button.TextColor3 = theme.Text
+        button.BackgroundTransparency = 0
+        btnbg.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        TweenService:Create(btnbg, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+        page.Visible = true
+        ui._internal.selectedButton = button
+        ui._internal.selectedPage = page
+    end)
+
+    if ui._internal.selectedButton == nil then
+        button.TextColor3 = theme.Text
+        button.BackgroundTransparency = 0
+        btnbg.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        btnbg.BackgroundTransparency = 0
+        page.Visible = true
+        ui._internal.selectedButton = button
+        ui._internal.selectedPage = page
+    end
+
+    -- แพ็คฟังก์ชันการสร้างปุ่มต่างๆ เข้าไปในหน้า Page (Tab นั้นๆ)
+    local pageObj = {}
+    
+    function pageObj:AddSection(text)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 28)
+        row.BackgroundTransparency = 1
+        row.ZIndex = 6
+        row.Parent = page
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = "—  " .. string.upper(text) .. "  —"
+        label.TextColor3 = theme.Accent
+        label.TextSize = 12
+        label.Font = Enum.Font.GothamBold
+        label.TextXAlignment = Enum.TextXAlignment.Center
+        label.ZIndex = 7
+        label.Parent = row
+    end
+
+    function pageObj:AddButton(text, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 36)
+        row.BackgroundTransparency = 1
+        row.Parent = page
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 1, 0)
+        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        btn.Text = text
+        btn.TextSize = 14
+        btn.TextColor3 = theme.Text
+        btn.Font = Enum.Font.GothamSemibold
+        btn.ZIndex = 7
+        btn.Parent = row
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+        btn.MouseButton1Click:Connect(function()
+            pcall(function() callback() end)
+        end)
+    end
+
+    function pageObj:AddToggle(text, flag, default, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 46)
+        row.BackgroundTransparency = 1
+        row.Parent = page
+        
+        local tog = Instance.new("TextButton")
+        tog.Size = UDim2.new(1, 0, 1, 0)
+        tog.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        tog.Text = "" 
+        tog.ZIndex = 7
+        tog.Parent = row
+        Instance.new("UICorner", tog).CornerRadius = UDim.new(0, 6)
+
+        local mainLabel = Instance.new("TextLabel")
+        mainLabel.Size = UDim2.new(1, -40, 0, 22)
+        mainLabel.Position = UDim2.new(0, 12, 0, 4)
+        mainLabel.BackgroundTransparency = 1
+        mainLabel.Text = text
+        mainLabel.TextColor3 = theme.Text
+        mainLabel.TextSize = 14
+        mainLabel.Font = Enum.Font.GothamSemibold
+        mainLabel.TextXAlignment = Enum.TextXAlignment.Left
+        mainLabel.ZIndex = 8
+        mainLabel.Parent = tog
+
+        local subLabel = Instance.new("TextLabel")
+        subLabel.Size = UDim2.new(1, -40, 0, 16)
+        subLabel.Position = UDim2.new(0, 12, 0, 24)
+        subLabel.BackgroundTransparency = 1
+        subLabel.Text = "Status: Disabled" 
+        subLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
+        subLabel.TextSize = 11
+        subLabel.Font = Enum.Font.Gotham
+        subLabel.TextXAlignment = Enum.TextXAlignment.Left
+        subLabel.ZIndex = 8
+        subLabel.Parent = tog
+
+        local statusBox = Instance.new("Frame")
+        statusBox.Size = UDim2.new(0, 20, 0, 20)
+        statusBox.Position = UDim2.new(1, -32, 0.5, -10)
+        statusBox.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        statusBox.ZIndex = 8
+        statusBox.Parent = tog
+        Instance.new("UICorner", statusBox).CornerRadius = UDim.new(0, 4)
+
+        if ui.flags[flag] == nil then ui.flags[flag] = default or false end
+        
+        local function updateToggle()
+            if ui.flags[flag] then
+                TweenService:Create(statusBox, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = theme.Accent}):Play()
+            else
+                TweenService:Create(statusBox, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}):Play()
+            end
+        end
+        updateToggle()
+
+        tog.MouseButton1Click:Connect(function()
+            ui.flags[flag] = not ui.flags[flag]
+            updateToggle()
+            ui:SaveConfig()
+            pcall(function() callback(ui.flags[flag], subLabel) end)
+        end)
+        
+        if ui.flags[flag] then
+            task.spawn(function() pcall(function() callback(ui.flags[flag], subLabel) end) end)
+        end
+    end
+
+    function pageObj:AddSlider(text, flag, min, max, default, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 44)
+        row.BackgroundTransparency = 1
+        row.Parent = page
+
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        bg.ZIndex = 7
+        bg.Parent = row
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.5, 0, 0, 24)
+        label.Position = UDim2.new(0, 12, 0, 2)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = theme.Text
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamSemibold
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.ZIndex = 8
+        label.Parent = bg
+
+        local valueBox = Instance.new("TextBox")
+        valueBox.Size = UDim2.new(0, 50, 0, 18)
+        valueBox.Position = UDim2.new(1, -62, 0, 4)
+        valueBox.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        valueBox.Text = ""
+        valueBox.TextColor3 = theme.Accent
+        valueBox.Font = Enum.Font.GothamBold
+        valueBox.TextSize = 12
+        valueBox.ZIndex = 8
+        valueBox.Parent = bg
+        Instance.new("UICorner", valueBox).CornerRadius = UDim.new(0, 4)
+
+        local sliderBar = Instance.new("TextButton")
+        sliderBar.Size = UDim2.new(1, -24, 0, 6)
+        sliderBar.Position = UDim2.new(0, 12, 1, -12)
+        sliderBar.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        sliderBar.Text = ""
+        sliderBar.ZIndex = 8
+        sliderBar.Parent = bg
+        Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 3)
+
+        local sliderFill = Instance.new("Frame")
+        sliderFill.Size = UDim2.new(0, 0, 1, 0)
+        sliderFill.BackgroundColor3 = theme.Accent
+        sliderFill.ZIndex = 9
+        sliderFill.Parent = sliderBar
+        Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 3)
+
+        if ui.flags[flag] == nil then ui.flags[flag] = default or min end
+        
+        local function updateSlider(value, skipBox)
+            value = math.clamp(value, min, max)
+            ui.flags[flag] = value
+            local percent = (value - min) / (max - min)
+            sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+            if not skipBox then valueBox.Text = tostring(math.round(value)) end
+            pcall(function() callback(value) end)
+        end
+
+        local isSliding = false
+        local function activateSlide(input)
+            local mousePos = input.Position.X
+            local barPos = sliderBar.AbsolutePosition.X
+            local barWidth = sliderBar.AbsoluteSize.X
+            local percent = math.clamp((mousePos - barPos) / barWidth, 0, 1)
+            local value = min + (percent * (max - min))
+            updateSlider(value)
+        end
+
+        sliderBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                isSliding = true
+                local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+                if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = true end
+                activateSlide(input)
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                activateSlide(input)
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                isSliding = false
+                local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+                if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = false end
+                ui:SaveConfig()
+            end
+        end)
+
+        valueBox.FocusLost:Connect(function()
+            local num = tonumber(valueBox.Text)
+            if num then updateSlider(num) else updateSlider(ui.flags[flag]) end
+            ui:SaveConfig()
+        end)
+
+        updateSlider(ui.flags[flag])
+    end
+
+    return pageObj
+end
+
+return ui
