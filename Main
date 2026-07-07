@@ -25,15 +25,22 @@ local ui = {
 function ui:CreateWindow(options)
     options = options or {}
     
+    local function sanitize(str)
+        return string.gsub(str, "[^%w%s%-_]", "")
+    end
+    
+    local mapName = options.Map or "Unknow map"
+    local saveFile = (options.Save and options.Save.SaveFile ~= "" and options.Save.SaveFile) or (sanitize(mapName) .. ".json")
+    
     local config = {
         Name = options.Name or "Wiv",
-        MapName = options.Map or "Unknown Map",
+        MapName = mapName,
         LogoText = options.Text or "",
         Width = 0.36,
         Height = 0.62,
         SaveConfig = true,
         SaveFolder = "settingsUi",
-        SaveFile = sanitizeFilename(MapName) .. ".json",
+        SaveFile = saveFile,
         ToggleKey = Enum.KeyCode.LeftControl,
         Theme = {
             Primary = Color3.fromRGB(14, 16, 20),
