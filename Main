@@ -21,7 +21,6 @@ local ui = {
     }
 }
 
--- ==================== CreateWindow ====================
 function ui:CreateWindow(options)
     options = options or {}
     
@@ -355,7 +354,6 @@ function ui:CreateWindow(options)
     ui._internal.tabList = tabList
     ui._internal.pages = pages
 
-    -- ==================== Animation (Default is None) ====================
     local isAnimating = false
     local function toggleUI(visible)
         if isAnimating then return end
@@ -405,7 +403,6 @@ function ui:CreateWindow(options)
                     isAnimating = false
                 end)
             else
-                -- [Default] "None" ปิดการมองเห็นทันที
                 frame.Visible = false
                 isAnimating = false
             end
@@ -516,8 +513,7 @@ function ui:CreateWindow(options)
             ui:SaveConfig()
         end
     end)
-
-    -- ระบบ Anti-AFK เฝ้าจอ
+    
     LocalPlayer.Idled:Connect(function()
         pcall(function()
             VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
@@ -525,8 +521,7 @@ function ui:CreateWindow(options)
             VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
         end)
     end)
-
-    -- รันลูปดึงข้อมูลเซิร์ฟเวอร์ (Ping, FPS, Players, Timer)
+    
     local startTime = os.time()
     local fpsCount = 0
     local lastFpsUpdate = os.clock()
@@ -567,8 +562,6 @@ function ui:CreateWindow(options)
     return windowObj
 end
 
-
--- ==================== SAVE / LOAD CONFIG INTERNALS ====================
 function ui:SaveConfig()
     local config = ui._internal.config
     if not config or not config.SaveConfig then return end
@@ -626,8 +619,6 @@ function ui:LoadConfig()
     end
 end
 
-
--- ==================== UI ELEMENTS ====================
 function ui:CreateTab(name)
     local tabList = ui._internal.tabList
     local pages = ui._internal.pages
@@ -699,8 +690,7 @@ function ui:CreateTab(name)
         ui._internal.selectedButton = button
         ui._internal.selectedPage = page
     end
-
-    -- แพ็คฟังก์ชันการสร้างปุ่มต่างๆ เข้าไปในหน้า Page (Tab นั้นๆ)
+    
     local pageObj = {}
     
     function pageObj:AddSection(text)
@@ -918,6 +908,286 @@ function ui:CreateTab(name)
         end)
 
         updateSlider(ui.flags[flag])
+    end
+    
+    function pageObj:Button(text, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 36)
+        row.BackgroundTransparency = 1
+        row.Parent = page
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, 0, 1, 0)
+        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        btn.Text = text
+        btn.TextSize = 14
+        btn.TextColor3 = theme.Text
+        btn.Font = Enum.Font.GothamSemibold
+        btn.ZIndex = 7
+        btn.Parent = row
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+        btn.MouseButton1Click:Connect(function()
+            pcall(function() callback() end)
+        end)
+    end
+
+    function pageObj:Input(text, flag, default, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 44)
+        row.BackgroundTransparency = 1
+        row.Parent = page
+
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        bg.ZIndex = 7
+        bg.Parent = row
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.6, 0, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = theme.Text
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamSemibold
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.ZIndex = 8
+        label.Parent = bg
+
+        if ui.flags[flag] == nil then ui.flags[flag] = default or "" end
+
+        local valueBox = Instance.new("TextBox")
+        valueBox.Size = UDim2.new(0.35, 0, 0, 24)
+        valueBox.Position = UDim2.new(1, -12, 0.5, -12)
+        valueBox.AnchorPoint = Vector2.new(1, 0)
+        valueBox.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        valueBox.Text = tostring(ui.flags[flag])
+        valueBox.TextColor3 = theme.Accent
+        valueBox.Font = Enum.Font.GothamMedium
+        valueBox.TextSize = 12
+        valueBox.ZIndex = 8
+        valueBox.ClearTextOnFocus = false
+        valueBox.Parent = bg
+        Instance.new("UICorner", valueBox).CornerRadius = UDim.new(0, 4)
+
+        valueBox.FocusLost:Connect(function(enterPressed)
+            ui.flags[flag] = valueBox.Text
+            ui:SaveConfig()
+            pcall(function() callback(valueBox.Text) end)
+        end)
+
+        if ui.flags[flag] ~= "" then
+            task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
+        end
+    end
+
+    function pageObj:Dropdown(text, flag, options, default, multi, callback)
+        local row = Instance.new("Frame")
+        row.Size = UDim2.new(1, -6, 0, 44)
+        row.BackgroundTransparency = 1
+        row.ClipsDescendants = true
+        row.Parent = page
+
+        local bg = Instance.new("TextButton")
+        bg.Size = UDim2.new(1, 0, 0, 44)
+        bg.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+        bg.Text = ""
+        bg.ZIndex = 7
+        bg.Parent = row
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 6)
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.5, 0, 1, 0)
+        label.Position = UDim2.new(0, 12, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = theme.Text
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamSemibold
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.ZIndex = 8
+        label.Parent = bg
+
+        if multi then
+            if ui.flags[flag] == nil or type(ui.flags[flag]) ~= "table" then 
+                ui.flags[flag] = {} 
+                if type(default) == "table" then
+                    for _, v in ipairs(default) do ui.flags[flag][v] = true end
+                elseif type(default) == "string" and default ~= "" then
+                    ui.flags[flag][default] = true
+                end
+            end
+        else
+            if ui.flags[flag] == nil or type(ui.flags[flag]) == "table" then 
+                ui.flags[flag] = (type(default) == "string" and default ~= "") and default or options[1] 
+            end
+        end
+
+        local selectedLabel = Instance.new("TextLabel")
+        selectedLabel.Size = UDim2.new(0.45, 0, 1, 0)
+        selectedLabel.Position = UDim2.new(1, -12, 0, 0)
+        selectedLabel.AnchorPoint = Vector2.new(1, 0)
+        selectedLabel.BackgroundTransparency = 1
+        selectedLabel.TextColor3 = theme.Accent
+        selectedLabel.TextSize = 12
+        selectedLabel.Font = Enum.Font.GothamBold
+        selectedLabel.TextXAlignment = Enum.TextXAlignment.Right
+        selectedLabel.ZIndex = 8
+        selectedLabel.Parent = bg
+
+        local optionContainer = Instance.new("Frame")
+        optionContainer.Size = UDim2.new(1, 0, 0, 0)
+        optionContainer.Position = UDim2.new(0, 0, 0, 44)
+        optionContainer.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+        optionContainer.Visible = false
+        optionContainer.ZIndex = 9
+        optionContainer.Parent = row
+        Instance.new("UICorner", optionContainer).CornerRadius = UDim.new(0, 6)
+
+        local optionLayout = Instance.new("UIListLayout")
+        optionLayout.Parent = optionContainer
+        optionLayout.Padding = UDim.new(0, 2)
+
+        local searchWrapper = Instance.new("Frame")
+        searchWrapper.Name = "SearchWrapper"
+        searchWrapper.Size = UDim2.new(1, 0, 0, 34)
+        searchWrapper.BackgroundTransparency = 1
+        searchWrapper.LayoutOrder = 0
+        searchWrapper.ZIndex = 10
+        searchWrapper.Parent = optionContainer
+
+        local searchBox = Instance.new("TextBox")
+        searchBox.Name = "SearchBox"
+        searchBox.Size = UDim2.new(1, -16, 0, 26)
+        searchBox.Position = UDim2.new(0, 8, 0, 4)
+        searchBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+        searchBox.Text = ""
+        searchBox.PlaceholderText = "Search option..."
+        searchBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 105)
+        searchBox.TextColor3 = theme.Text
+        searchBox.Font = Enum.Font.Gotham
+        searchBox.TextSize = 12
+        searchBox.ZIndex = 11
+        searchBox.ClearTextOnFocus = false
+        searchBox.Parent = searchWrapper
+        Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
+
+        local function updateMainLabel(arrow)
+            arrow = arrow or "▼"
+            if multi then
+                local selected = {}
+                for _, opt in ipairs(options) do
+                    if ui.flags[flag][opt] then table.insert(selected, opt) end
+                end
+                if #selected == 0 then
+                    selectedLabel.Text = "None  " .. arrow
+                else
+                    selectedLabel.Text = table.concat(selected, ", ") .. "  " .. arrow
+                end
+            else
+                selectedLabel.Text = tostring(ui.flags[flag]) .. "  " .. arrow
+            end
+        end
+
+        local optButtons = {}
+        local optVisuals = {}
+
+        local function resizeDropdown()
+            local visibleCount = 0
+            for _, btn in pairs(optButtons) do
+                if btn.Visible then visibleCount = visibleCount + 1 end
+            end
+            local totalHeight = 34 + (visibleCount * 28) + 4
+            optionContainer.Size = UDim2.new(1, 0, 0, totalHeight)
+            row.Size = UDim2.new(1, -6, 0, 44 + totalHeight)
+        end
+
+        local isOpen = false
+        local function toggleDropdown()
+            isOpen = not isOpen
+            optionContainer.Visible = isOpen
+            if isOpen then
+                searchBox.Text = "" 
+                for _, btn in pairs(optButtons) do btn.Visible = true end
+                resizeDropdown()
+                updateMainLabel("▲")
+                searchBox:CaptureFocus() 
+            else
+                row.Size = UDim2.new(1, -6, 0, 44)
+                updateMainLabel("▼")
+            end
+        end
+
+        bg.MouseButton1Click:Connect(toggleDropdown)
+
+        searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+            local query = string.lower(searchBox.Text)
+            for opt, btn in pairs(optButtons) do
+                if query == "" or string.find(string.lower(tostring(opt)), query) then
+                    btn.Visible = true
+                else
+                    btn.Visible = false
+                end
+            end
+            resizeDropdown()
+        end)
+
+        for _, opt in ipairs(options) do
+            local optBtn = Instance.new("TextButton")
+            optBtn.Size = UDim2.new(1, 0, 0, 26)
+            optBtn.BackgroundTransparency = 1
+            optBtn.TextSize = 12
+            optBtn.Font = Enum.Font.GothamMedium
+            optBtn.TextXAlignment = Enum.TextXAlignment.Left
+            optBtn.ZIndex = 10
+            optBtn.LayoutOrder = 1
+            optBtn.Parent = optionContainer
+
+            local function updateOptVisual()
+                if multi then
+                    if ui.flags[flag][opt] then
+                        optBtn.TextColor3 = theme.Accent
+                        optBtn.Text = "   ✓ " .. tostring(opt)
+                    else
+                        optBtn.TextColor3 = theme.Text
+                        optBtn.Text = "   • " .. tostring(opt)
+                    end
+                else
+                    optBtn.Text = "   • " .. tostring(opt)
+                    if ui.flags[flag] == opt then
+                        optBtn.TextColor3 = theme.Accent
+                    else
+                        optBtn.TextColor3 = theme.Text
+                    end
+                end
+            end
+            
+            updateOptVisual()
+            optButtons[opt] = optBtn
+            optVisuals[opt] = updateOptVisual
+
+            optBtn.MouseButton1Click:Connect(function()
+                if multi then
+                    ui.flags[flag][opt] = not ui.flags[flag][opt]
+                    updateOptVisual()
+                    updateMainLabel("▲")
+                    ui:SaveConfig()
+                    pcall(function() callback(ui.flags[flag]) end)
+                else
+                    ui.flags[flag] = opt
+                    for _, updateVisual in pairs(optVisuals) do updateVisual() end
+                    toggleDropdown()
+                    ui:SaveConfig()
+                    pcall(function() callback(opt) end)
+                end
+            end)
+        end
+
+        updateMainLabel("▼")
+        task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
     end
 
     return pageObj
