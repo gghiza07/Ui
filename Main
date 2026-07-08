@@ -1,7 +1,7 @@
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService") -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService
+local UserInputService = game:GetService("UserInputService") 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
@@ -63,6 +63,10 @@ function ui:CreateWindow(options)
     ui._internal.config = config
     ui._internal.theme = config.Theme
     
+    -- ป้องกัน UI ซ้อนทับกัน ถ้ารันหลายรอบ
+    local oldGui = CoreGui:FindFirstChild(config.Name .. "_Gui")
+    if oldGui then oldGui:Destroy() end
+
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = config.Name .. "_Gui"
     screenGui.Parent = CoreGui
@@ -416,7 +420,6 @@ function ui:CreateWindow(options)
         toggleUI(true)
     end)
     
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Began เป็น InputBegan
     UserInputService.InputBegan:Connect(function(input, processed)
         if not processed and input.KeyCode == config.ToggleKey then
             toggleUI(not frame.Visible)
@@ -424,8 +427,8 @@ function ui:CreateWindow(options)
     end)
     
     local dragging, last, startDrag, startPos
-    main.Began:Connect(function(input)
-        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
+    main.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             last = input
             startDrag = input.Position
@@ -433,14 +436,12 @@ function ui:CreateWindow(options)
             modalBtn.Modal = true
         end
     end)
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
     UserInputService.InputChanged:Connect(function(input)
         if dragging and input == last then
             local delta = input.Position - startDrag
             frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
     UserInputService.InputEnded:Connect(function(input)
         if input == last then
             dragging = false
@@ -451,22 +452,21 @@ function ui:CreateWindow(options)
     end)
    
     local floatDragging, floatLast, floatStartDrag, floatStartPos
-    floatBtn.Began:Connect(function(input)
-        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
+    floatBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             floatDragging = true
             floatLast = input
             floatStartDrag = input.Position
             floatStartPos = floatBtn.Position
         end
     end)
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
     UserInputService.InputChanged:Connect(function(input)
         if floatDragging and input == floatLast then
             local delta = input.Position - floatStartDrag
             floatBtn.Position = UDim2.new(floatStartPos.X.Scale, floatStartPos.X.Offset + delta.X, floatStartPos.Y.Scale, floatStartPos.Y.Offset + delta.Y)
         end
     end)
-    floatBtn.Ended:Connect(function(input)
+    floatBtn.InputEnded:Connect(function(input)
         if input == floatLast then
             floatDragging = false
             floatLast = nil
@@ -488,8 +488,8 @@ function ui:CreateWindow(options)
     local MIN_SIZE = Vector2.new(340, 220) 
     local MAX_SIZE = Vector2.new(math.max(340, Camera.ViewportSize.X - 40), math.max(220, Camera.ViewportSize.Y - 40))
 
-    grip.Began:Connect(function(input)
-        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
+    grip.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = true
             resize = input
             resizeStart = input.Position
@@ -498,7 +498,6 @@ function ui:CreateWindow(options)
             modalBtn.Modal = true
         end
     end)
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
     UserInputService.InputChanged:Connect(function(input)
         if resizing and input == resize then
             local delta = input.Position - resizeStart
@@ -507,7 +506,6 @@ function ui:CreateWindow(options)
             frame.Size = UDim2.new(0, math.floor(newW), 0, math.floor(newH))
         end
     end)
-    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
     UserInputService.InputEnded:Connect(function(input)
         if input == resize then
             resizing = false
@@ -617,7 +615,6 @@ function ui:LoadConfig()
     local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
     if not gui then return end
 
-    -- [แก้จุดปลอดภัย] ดึงค่าโดยตรงจาก gui ที่หาเจอแล้ว ป้องกันปัญหาระบบหาปุ่มไม่ทัน
     local mainFrame = gui:FindFirstChild("MainFrame")
     local floatIcon = gui:FindFirstChild("FloatingIcon")
 
@@ -904,8 +901,8 @@ function ui:CreateTab(name)
             updateSlider(value)
         end
 
-        sliderBar.Began:Connect(function(input)
-            if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
+        sliderBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 isSliding = true
                 local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = true end
@@ -913,16 +910,14 @@ function ui:CreateTab(name)
             end
         end)
 
-        -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
         UserInputService.InputChanged:Connect(function(input)
-            if isSliding and (input.UserType == Enum.UserType.MouseMovement or input.UserType == Enum.UserType.Touch) then
+            if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                 activateSlide(input)
             end
         end)
 
-        -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
         UserInputService.InputEnded:Connect(function(input)
-            if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 isSliding = false
                 local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = false end
@@ -961,7 +956,6 @@ function ui:CreateTab(name)
         end)
     end
 
-    -- [แก้จุดผิดมหันต์] เติมชื่อฟังก์ชันเป็น :Input เพื่อไม่ให้คอมไพล์แล้วติด Nil Value
     function pageObj:Input(text, flag, default, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 44)
