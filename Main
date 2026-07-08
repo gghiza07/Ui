@@ -1,7 +1,7 @@
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local UserService = game:GetService("UserService")
+local UserInputService = game:GetService("UserInputService") -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
@@ -416,7 +416,8 @@ function ui:CreateWindow(options)
         toggleUI(true)
     end)
     
-    UserService.Began:Connect(function(input, processed)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Began เป็น InputBegan
+    UserInputService.InputBegan:Connect(function(input, processed)
         if not processed and input.KeyCode == config.ToggleKey then
             toggleUI(not frame.Visible)
         end
@@ -432,13 +433,15 @@ function ui:CreateWindow(options)
             modalBtn.Modal = true
         end
     end)
-    UserService.Changed:Connect(function(input)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
+    UserInputService.InputChanged:Connect(function(input)
         if dragging and input == last then
             local delta = input.Position - startDrag
             frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-    UserService.Ended:Connect(function(input)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
+    UserInputService.InputEnded:Connect(function(input)
         if input == last then
             dragging = false
             last = nil
@@ -456,7 +459,8 @@ function ui:CreateWindow(options)
             floatStartPos = floatBtn.Position
         end
     end)
-    UserService.Changed:Connect(function(input)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
+    UserInputService.InputChanged:Connect(function(input)
         if floatDragging and input == floatLast then
             local delta = input.Position - floatStartDrag
             floatBtn.Position = UDim2.new(floatStartPos.X.Scale, floatStartPos.X.Offset + delta.X, floatStartPos.Y.Scale, floatStartPos.Y.Offset + delta.Y)
@@ -494,7 +498,8 @@ function ui:CreateWindow(options)
             modalBtn.Modal = true
         end
     end)
-    UserService.Changed:Connect(function(input)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
+    UserInputService.InputChanged:Connect(function(input)
         if resizing and input == resize then
             local delta = input.Position - resizeStart
             local newW = math.clamp(startSize.X + delta.X, MIN_SIZE.X, MAX_SIZE.X)
@@ -502,7 +507,8 @@ function ui:CreateWindow(options)
             frame.Size = UDim2.new(0, math.floor(newW), 0, math.floor(newH))
         end
     end)
-    UserService.Ended:Connect(function(input)
+    -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
+    UserInputService.InputEnded:Connect(function(input)
         if input == resize then
             resizing = false
             resize = nil
@@ -611,8 +617,9 @@ function ui:LoadConfig()
     local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
     if not gui then return end
 
-    local mainFrame = CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
-    local floatIcon = CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
+    -- [แก้จุดปลอดภัย] ดึงค่าโดยตรงจาก gui ที่หาเจอแล้ว ป้องกันปัญหาระบบหาปุ่มไม่ทัน
+    local mainFrame = gui:FindFirstChild("MainFrame")
+    local floatIcon = gui:FindFirstChild("FloatingIcon")
 
     if readfile and isfile and isfile(filePath) then
         local success, result = pcall(function()
@@ -906,13 +913,15 @@ function ui:CreateTab(name)
             end
         end)
 
-        UserService.Changed:Connect(function(input)
+        -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Changed เป็น InputChanged
+        UserInputService.InputChanged:Connect(function(input)
             if isSliding and (input.UserType == Enum.UserType.MouseMovement or input.UserType == Enum.UserType.Touch) then
                 activateSlide(input)
             end
         end)
 
-        UserService.Ended:Connect(function(input)
+        -- [แก้จุดผิด] เปลี่ยนจาก UserService เป็น UserInputService และ Ended เป็น InputEnded
+        UserInputService.InputEnded:Connect(function(input)
             if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
                 isSliding = false
                 local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
@@ -952,7 +961,8 @@ function ui:CreateTab(name)
         end)
     end
 
-    function pageObj:(text, flag, default, callback)
+    -- [แก้จุดผิดมหันต์] เติมชื่อฟังก์ชันเป็น :Input เพื่อไม่ให้คอมไพล์แล้วติด Nil Value
+    function pageObj:Input(text, flag, default, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 44)
         row.BackgroundTransparency = 1
