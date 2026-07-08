@@ -1,7 +1,7 @@
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local UserService = game:GetService("UserService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
@@ -416,56 +416,56 @@ function ui:CreateWindow(options)
         toggleUI(true)
     end)
     
-    UserInputService.InputBegan:Connect(function(input, processed)
+    UserService.Began:Connect(function(input, processed)
         if not processed and input.KeyCode == config.ToggleKey then
             toggleUI(not frame.Visible)
         end
     end)
     
-    local dragging, lastInput, startDrag, startPos
-    main.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    local dragging, last, startDrag, startPos
+    main.Began:Connect(function(input)
+        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
             dragging = true
-            lastInput = input
+            last = input
             startDrag = input.Position
             startPos = frame.Position
             modalBtn.Modal = true
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input == lastInput then
+    UserService.Changed:Connect(function(input)
+        if dragging and input == last then
             local delta = input.Position - startDrag
             frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input == lastInput then
+    UserService.Ended:Connect(function(input)
+        if input == last then
             dragging = false
-            lastInput = nil
+            last = nil
             modalBtn.Modal = false
             ui:SaveConfig()
         end
     end)
    
-    local floatDragging, floatLastInput, floatStartDrag, floatStartPos
-    floatBtn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    local floatDragging, floatLast, floatStartDrag, floatStartPos
+    floatBtn.Began:Connect(function(input)
+        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
             floatDragging = true
-            floatLastInput = input
+            floatLast = input
             floatStartDrag = input.Position
             floatStartPos = floatBtn.Position
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if floatDragging and input == floatLastInput then
+    UserService.Changed:Connect(function(input)
+        if floatDragging and input == floatLast then
             local delta = input.Position - floatStartDrag
             floatBtn.Position = UDim2.new(floatStartPos.X.Scale, floatStartPos.X.Offset + delta.X, floatStartPos.Y.Scale, floatStartPos.Y.Offset + delta.Y)
         end
     end)
-    floatBtn.InputEnded:Connect(function(input)
-        if input == floatLastInput then
+    floatBtn.Ended:Connect(function(input)
+        if input == floatLast then
             floatDragging = false
-            floatLastInput = nil
+            floatLast = nil
             ui:SaveConfig() 
         end
     end)
@@ -480,32 +480,32 @@ function ui:CreateWindow(options)
     grip.Parent = frame
     Instance.new("UICorner", grip).CornerRadius = UDim.new(0, 6)
 
-    local resizing, resizeInput, resizeStart, startSize
+    local resizing, resize, resizeStart, startSize
     local MIN_SIZE = Vector2.new(340, 220) 
     local MAX_SIZE = Vector2.new(math.max(340, Camera.ViewportSize.X - 40), math.max(220, Camera.ViewportSize.Y - 40))
 
-    grip.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    grip.Began:Connect(function(input)
+        if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
             resizing = true
-            resizeInput = input
+            resize = input
             resizeStart = input.Position
             local absSize = frame.AbsoluteSize
             startSize = Vector2.new(absSize.X, absSize.Y)
             modalBtn.Modal = true
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if resizing and input == resizeInput then
+    UserService.Changed:Connect(function(input)
+        if resizing and input == resize then
             local delta = input.Position - resizeStart
             local newW = math.clamp(startSize.X + delta.X, MIN_SIZE.X, MAX_SIZE.X)
             local newH = math.clamp(startSize.Y + delta.Y, MIN_SIZE.Y, MAX_SIZE.Y)
             frame.Size = UDim2.new(0, math.floor(newW), 0, math.floor(newH))
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input == resizeInput then
+    UserService.Ended:Connect(function(input)
+        if input == resize then
             resizing = false
-            resizeInput = nil
+            resize = nil
             modalBtn.Modal = false
             ui:SaveConfig()
         end
@@ -607,6 +607,10 @@ function ui:LoadConfig()
     if not config then return end
 
     local filePath = (config.SaveFolder ~= "" and config.SaveFolder .. "/" or "") .. config.SaveFile
+
+    local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
+    if not gui then return end
+
     local mainFrame = CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
     local floatIcon = CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
 
@@ -893,8 +897,8 @@ function ui:CreateTab(name)
             updateSlider(value)
         end
 
-        sliderBar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        sliderBar.Began:Connect(function(input)
+            if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
                 isSliding = true
                 local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = true end
@@ -902,14 +906,14 @@ function ui:CreateTab(name)
             end
         end)
 
-        UserInputService.InputChanged:Connect(function(input)
-            if isSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        UserService.Changed:Connect(function(input)
+            if isSliding and (input.UserType == Enum.UserType.MouseMovement or input.UserType == Enum.UserType.Touch) then
                 activateSlide(input)
             end
         end)
 
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        UserService.Ended:Connect(function(input)
+            if input.UserType == Enum.UserType.MouseButton1 or input.UserType == Enum.UserType.Touch then
                 isSliding = false
                 local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = false end
@@ -948,7 +952,7 @@ function ui:CreateTab(name)
         end)
     end
 
-    function pageObj:Input(text, flag, default, callback)
+    function pageObj:(text, flag, default, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 44)
         row.BackgroundTransparency = 1
@@ -1088,7 +1092,7 @@ function ui:CreateTab(name)
         searchBox.TextSize = 12
         searchBox.ZIndex = 11
         searchBox.ClearTextOnFocus = false
-        searchBox.Parent = searchBox
+        searchBox.Parent = searchWrapper
         Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
 
         local function updateMainLabel(arrow)
