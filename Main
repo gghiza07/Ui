@@ -758,9 +758,9 @@ function ui:CreateTab(name)
         end)
     end
 
-    function pageObj:AddToggle(text, flag, default, callback)
+        function pageObj:AddToggle(text, flag, default, callback)
         local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -6, 0, 46)
+        row.Size = UDim2.new(1, -6, 0, 36)
         row.BackgroundTransparency = 1
         row.Parent = page
         
@@ -773,8 +773,9 @@ function ui:CreateTab(name)
         Instance.new("UICorner", tog).CornerRadius = UDim.new(0, 6)
 
         local mainLabel = Instance.new("TextLabel")
-        mainLabel.Size = UDim2.new(1, -40, 0, 22)
-        mainLabel.Position = UDim2.new(0, 12, 0, 4)
+        -- ขยายความกว้างเต็มปุ่ม เพราะไม่มี statusBox มาขวางแล้ว
+        mainLabel.Size = UDim2.new(1, -20, 1, 0) 
+        mainLabel.Position = UDim2.new(0, 12, 0, 0)
         mainLabel.BackgroundTransparency = 1
         mainLabel.Text = text
         mainLabel.TextColor3 = theme.Text
@@ -784,33 +785,13 @@ function ui:CreateTab(name)
         mainLabel.ZIndex = 8
         mainLabel.Parent = tog
 
-        local subLabel = Instance.new("TextLabel")
-        subLabel.Size = UDim2.new(1, -40, 0, 16)
-        subLabel.Position = UDim2.new(0, 12, 0, 24)
-        subLabel.BackgroundTransparency = 1
-        subLabel.Text = "Status: Disabled" 
-        subLabel.TextColor3 = Color3.fromRGB(150, 150, 155)
-        subLabel.TextSize = 11
-        subLabel.Font = Enum.Font.Gotham
-        subLabel.TextXAlignment = Enum.TextXAlignment.Left
-        subLabel.ZIndex = 8
-        subLabel.Parent = tog
-
-        local statusBox = Instance.new("Frame")
-        statusBox.Size = UDim2.new(0, 20, 0, 20)
-        statusBox.Position = UDim2.new(1, -32, 0.5, -10)
-        statusBox.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
-        statusBox.ZIndex = 8
-        statusBox.Parent = tog
-        Instance.new("UICorner", statusBox).CornerRadius = UDim.new(0, 4)
-
         if ui.flags[flag] == nil then ui.flags[flag] = default or false end
         
         local function updateToggle()
             if ui.flags[flag] then
-                TweenService:Create(statusBox, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = theme.Accent}):Play()
+                TweenService:Create(tog, TweenInfo.new(0.2), {BackgroundColor3 = theme.Accent}):Play()
             else
-                TweenService:Create(statusBox, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(20, 20, 24)}):Play()
+                TweenService:Create(tog, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 34)}):Play()
             end
         end
         updateToggle()
@@ -819,13 +800,14 @@ function ui:CreateTab(name)
             ui.flags[flag] = not ui.flags[flag]
             updateToggle()
             ui:SaveConfig()
-            pcall(function() callback(ui.flags[flag], subLabel) end)
+            pcall(function() callback(ui.flags[flag]) end)
         end)
         
         if ui.flags[flag] then
-            task.spawn(function() pcall(function() callback(ui.flags[flag], subLabel) end) end)
+            task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
         end
     end
+
 
     function pageObj:AddSlider(text, flag, min, max, default, callback)
         local row = Instance.new("Frame")
