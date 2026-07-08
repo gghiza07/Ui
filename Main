@@ -192,7 +192,7 @@ function ui:CreateWindow(options)
     titleAndMapFrame.Parent = leftHeaderContainer
 
     local titleAndMapLayout = Instance.new("UIListLayout")
-    titleAndMapLayout.FillDirection = Enum.FillDirection.Vertical
+    titleAndMapLayout.FillDirection = Enum.FillDirection.Horizontal
     titleAndMapLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     titleAndMapLayout.Padding = UDim.new(0, -1)
     titleAndMapLayout.Parent = titleAndMapFrame
@@ -350,9 +350,6 @@ function ui:CreateWindow(options)
     local pages = Instance.new("Folder")
     pages.Name = "Pages"
     pages.Parent = contentArea
-
-    ui._internal.tabList = tabList
-    ui._internal.pages = pages
 
     local isAnimating = false
     local function toggleUI(visible)
@@ -553,6 +550,22 @@ function ui:CreateWindow(options)
         end
     end)
     
+    ui._internal.tabList = tabList
+    ui._internal.pages = pages
+    
+    if options.Save and options.Save.Fixbug then
+        local filePath = (config.SaveFolder ~= "" and config.SaveFolder .. "/" or "") .. config.SaveFile
+        pcall(function()
+            if isfile and isfile(filePath) then
+                local data = HttpService:JSONDecode(readfile(filePath))
+                data.Pos = nil
+                data.Size = nil
+                data.FloatPos = nil
+                writefile(filePath, HttpService:JSONEncode(data))
+            end
+        end)
+    end
+    
     ui:LoadConfig()
 
     local windowObj = {}
@@ -580,8 +593,11 @@ function ui:SaveConfig()
     
     if writefile and makefolder then
         pcall(function()
-            makefolder(config.SaveFolder)
-            writefile(config.SaveFolder .. "/" .. config.SaveFile, HttpService:JSONEncode(data))
+            if config.SaveFolder ~= "" then
+                makefolder(config.SaveFolder)
+            end
+            local filePath = (config.SaveFolder ~= "" and config.SaveFolder .. "/" or "") .. config.SaveFile
+            writefile(filePath, HttpService:JSONEncode(data))
         end)
     end
 end
@@ -590,7 +606,7 @@ function ui:LoadConfig()
     local config = ui._internal.config
     if not config then return end
 
-    local filePath = config.SaveFolder .. "/" .. config.SaveFile
+    local filePath = (config.SaveFolder ~= "" and config.SaveFolder .. "/" or "") .. config.SaveFile
     local mainFrame = CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
     local floatIcon = CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
 
@@ -1072,7 +1088,7 @@ function ui:CreateTab(name)
         searchBox.TextSize = 12
         searchBox.ZIndex = 11
         searchBox.ClearTextOnFocus = false
-        searchBox.Parent = searchWrapper
+        searchBox.Parent = searchBox
         Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
 
         local function updateMainLabel(arrow)
