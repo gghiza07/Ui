@@ -63,7 +63,6 @@ function ui:CreateWindow(options)
     ui._internal.config = config
     ui._internal.theme = config.Theme
     
-    -- ป้องกัน UI ซ้อนทับกัน ถ้ารันหลายรอบ
     local oldGui = CoreGui:FindFirstChild(config.Name .. "_Gui")
     if oldGui then oldGui:Destroy() end
 
@@ -758,7 +757,7 @@ function ui:CreateTab(name)
         end)
     end
 
-        function pageObj:AddToggle(text, flag, default, callback)
+    function pageObj:AddToggle(text, flag, default, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 36)
         row.BackgroundTransparency = 1
@@ -773,7 +772,6 @@ function ui:CreateTab(name)
         Instance.new("UICorner", tog).CornerRadius = UDim.new(0, 6)
 
         local mainLabel = Instance.new("TextLabel")
-        -- ขยายความกว้างเต็มปุ่ม เพราะไม่มี statusBox มาขวางแล้ว
         mainLabel.Size = UDim2.new(1, -20, 1, 0) 
         mainLabel.Position = UDim2.new(0, 12, 0, 0)
         mainLabel.BackgroundTransparency = 1
@@ -989,7 +987,7 @@ function ui:CreateTab(name)
             task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
         end
     end
-
+    
     function pageObj:Dropdown(text, flag, options, default, multi, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 44)
@@ -1016,21 +1014,10 @@ function ui:CreateTab(name)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.ZIndex = 8
         label.Parent = bg
-
-        if multi then
-            if ui.flags[flag] == nil or type(ui.flags[flag]) ~= "table" then 
-                ui.flags[flag] = {} 
-                if type(default) == "table" then
-                    for _, v in ipairs(default) do ui.flags[flag][v] = true end
-                elseif type(default) == "string" and default ~= "" then
-                    ui.flags[flag][default] = true
-                end
-            end
-        else
-            if ui.flags[flag] == nil or type(ui.flags[flag]) == "table" then 
-                ui.flags[flag] = (type(default) == "string" and default ~= "") and default or options[1] 
-            end
-        end
+        
+        local currentRawOptions = options
+        local optButtons = {}
+        local optVisuals = {}
 
         local selectedLabel = Instance.new("TextLabel")
         selectedLabel.Size = UDim2.new(0.45, 0, 1, 0)
@@ -1083,10 +1070,11 @@ function ui:CreateTab(name)
 
         local function updateMainLabel(arrow)
             arrow = arrow or "▼"
+            local renderOptions = type(currentRawOptions) == "function" and currentRawOptions() or currentRawOptions
             if multi then
                 local selected = {}
-                for _, opt in ipairs(options) do
-                    if ui.flags[flag][opt] then table.insert(selected, opt) end
+                for _, opt in ipairs(renderOptions) do
+                    if ui.flags[flag] and ui.flags[flag][opt] then table.insert(selected, opt) end
                 end
                 if #selected == 0 then
                     selectedLabel.Text = "None  " .. arrow
@@ -1094,12 +1082,9 @@ function ui:CreateTab(name)
                     selectedLabel.Text = table.concat(selected, ", ") .. "  " .. arrow
                 end
             else
-                selectedLabel.Text = tostring(ui.flags[flag]) .. "  " .. arrow
+                selectedLabel.Text = tostring(ui.flags[flag] or "None") .. "  " .. arrow
             end
         end
-
-        local optButtons = {}
-        local optVisuals = {}
 
         local function resizeDropdown()
             local visibleCount = 0
@@ -1110,10 +1095,83 @@ function ui:CreateTab(name)
             optionContainer.Size = UDim2.new(1, 0, 0, totalHeight)
             row.Size = UDim2.new(1, -6, 0, 44 + totalHeight)
         end
+        local dropdownObj = {}
+        function dropdownObj:Refresh(newOptions)
+            currentRawOptions = newOptions
+            local optionList = type(newOptions) == "function" and newOptions() or newOptions
+            for _, btn in pairs(optButtons) do btn:Destroy() end
+            table.clear(optButtons)
+            table.clear(optVisuals)
+
+            if multi then
+                if ui.flags[flag] == nil or type(ui.flags[flag]) ~= "table" then ui.flags[flag] = {} end
+            else
+                if ui.flags[flag] == nil or type(ui.flags[flag]) == "table" then 
+                    ui.flags[flag] = optionList[1] or "None"
+                end
+            end
+            
+            for _, opt in ipairs(optionList) do
+                local optBtn = Instance.new("TextButton")
+                optBtn.Size = UDim2.new(1, 0, 0, 26)
+                optBtn.BackgroundTransparency = 1
+                optBtn.TextSize = 12
+                optBtn.Font = Enum.Font.GothamMedium
+                optBtn.TextXAlignment = Enum.TextXAlignment.Left
+                optBtn.ZIndex = 10
+                optBtn.LayoutOrder = 1
+                optBtn.Parent = optionContainer
+
+                local function updateOptVisual()
+                    if multi then
+                        if ui.flags[flag][opt] then
+                            optBtn.TextColor3 = theme.Accent
+                            optBtn.Text = "   ✓ " .. tostring(opt)
+                        else
+                            optBtn.TextColor3 = theme.Text
+                            optBtn.Text = "   • " .. tostring(opt)
+                        end
+                    else
+                        optBtn.Text = "   • " .. tostring(opt)
+                        if ui.flags[flag] == opt then
+                            optBtn.TextColor3 = theme.Accent
+                        else
+                            optBtn.TextColor3 = theme.Text
+                        end
+                    end
+                end
+                
+                updateOptVisual()
+                optButtons[opt] = optBtn
+                optVisuals[opt] = updateOptVisual
+
+                optBtn.MouseButton1Click:Connect(function()
+                    if multi then
+                        ui.flags[flag][opt] = not ui.flags[flag][opt]
+                        updateOptVisual()
+                        updateMainLabel("▲")
+                        ui:SaveConfig()
+                        pcall(function() callback(ui.flags[flag]) end)
+                    else
+                        ui.flags[flag] = opt
+                        for _, updateVisual in pairs(optVisuals) do updateVisual() end
+                        if dropdownObj.Toggle then dropdownObj:Toggle() end
+                        ui:SaveConfig()
+                        pcall(function() callback(opt) end)
+                    end
+                end)
+            end
+            updateMainLabel(isOpen and "▲" or "▼")
+            if isOpen then resizeDropdown() end
+        end
 
         local isOpen = false
-        local function toggleDropdown()
+        function dropdownObj:Toggle()
             isOpen = not isOpen
+            if isOpen and type(currentRawOptions) == "function" then
+                dropdownObj:Refresh(currentRawOptions)
+            end
+
             optionContainer.Visible = isOpen
             if isOpen then
                 searchBox.Text = "" 
@@ -1126,7 +1184,9 @@ function ui:CreateTab(name)
             end
         end
 
-        bg.MouseButton1Click:Connect(toggleDropdown)
+        bg.MouseButton1Click:Connect(function()
+            dropdownObj:Toggle()
+        end)
 
         searchBox:GetPropertyChangedSignal("Text"):Connect(function()
             local query = string.lower(searchBox.Text)
@@ -1139,60 +1199,27 @@ function ui:CreateTab(name)
             end
             resizeDropdown()
         end)
-
-        for _, opt in ipairs(options) do
-            local optBtn = Instance.new("TextButton")
-            optBtn.Size = UDim2.new(1, 0, 0, 26)
-            optBtn.BackgroundTransparency = 1
-            optBtn.TextSize = 12
-            optBtn.Font = Enum.Font.GothamMedium
-            optBtn.TextXAlignment = Enum.TextXAlignment.Left
-            optBtn.ZIndex = 10
-            optBtn.LayoutOrder = 1
-            optBtn.Parent = optionContainer
-
-            local function updateOptVisual()
-                if multi then
-                    if ui.flags[flag][opt] then
-                        optBtn.TextColor3 = theme.Accent
-                        optBtn.Text = "   ✓ " .. tostring(opt)
-                    else
-                        optBtn.TextColor3 = theme.Text
-                        optBtn.Text = "   • " .. tostring(opt)
-                    end
-                else
-                    optBtn.Text = "   • " .. tostring(opt)
-                    if ui.flags[flag] == opt then
-                        optBtn.TextColor3 = theme.Accent
-                    else
-                        optBtn.TextColor3 = theme.Text
-                    end
+        
+        dropdownObj:Refresh(options)
+        
+        if multi then
+            if ui.flags[flag] == nil or table.create == nil then 
+                if type(default) == "table" then
+                    for _, v in ipairs(default) do ui.flags[flag][v] = true end
+                elseif type(default) == "string" and default ~= "" then
+                    ui.flags[flag][default] = true
                 end
             end
-            
-            updateOptVisual()
-            optButtons[opt] = optBtn
-            optVisuals[opt] = updateOptVisual
-
-            optBtn.MouseButton1Click:Connect(function()
-                if multi then
-                    ui.flags[flag][opt] = not ui.flags[flag][opt]
-                    updateOptVisual()
-                    updateMainLabel("▲")
-                    ui:SaveConfig()
-                    pcall(function() callback(ui.flags[flag]) end)
-                else
-                    ui.flags[flag] = opt
-                    for _, updateVisual in pairs(optVisuals) do updateVisual() end
-                    toggleDropdown()
-                    ui:SaveConfig()
-                    pcall(function() callback(opt) end)
-                end
-            end)
+        else
+            if default and default ~= "" and ui.flags[flag] == options[1] then
+                ui.flags[flag] = default
+            end
         end
-
-        updateMainLabel("▼")
+        
+        dropdownObj:Refresh(options)
         task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
+        
+        return dropdownObj
     end
 
     return pageObj
