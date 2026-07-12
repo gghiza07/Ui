@@ -153,9 +153,19 @@ function ui:CreateWindow(options)
     local mainAccent2 = Instance.new("UIGradient")
     mainAccent2.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, config.Theme.Accent2),
-        ColorSequenceKeypoint.new(1, config.Theme.Accent)
+        ColorSequenceKeypoint.new(0.5, config.Theme.Accent),
+        ColorSequenceKeypoint.new(1, config.Theme.Accent2)
     }
     mainAccent2.Parent = mainAccent
+
+    task.spawn(function()
+        while mainAccent2 and mainAccent2.Parent do
+            for offset = 0, 1, 0.01 do
+                mainAccent2.Offset = Vector2.new(-offset, 0)
+                RunService.RenderStepped:Wait()
+            end
+        end
+    end)
 
     local leftHeaderContainer = Instance.new("Frame")
     leftHeaderContainer.Name = "LeftHeader"
@@ -367,7 +377,7 @@ function ui:CreateWindow(options)
             frame.Visible = true
             
             if animStyle == "Scale" then
-                frame.GroupTransparency = 0
+                frame.GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0
                 uiScale.Scale = 0
                 local t = TweenService:Create(uiScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})
                 t:Play()
@@ -375,19 +385,18 @@ function ui:CreateWindow(options)
             elseif animStyle == "Fade" then
                 uiScale.Scale = 1
                 frame.GroupTransparency = 1
-                local t = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = 0})
+                local t = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0})
                 t:Play()
                 t.Completed:Connect(function() isAnimating = false end)
             else
                 uiScale.Scale = 1
-                frame.GroupTransparency = 0
+                frame.GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0
                 isAnimating = false
             end
         else
             isAnimating = true
             
             if animStyle == "Scale" then
-                frame.GroupTransparency = 0
                 local t = TweenService:Create(uiScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
                 t:Play()
                 t.Completed:Connect(function()
@@ -640,6 +649,28 @@ function ui:LoadConfig()
     if ui.flags["close_animation_style"] == nil then
         ui.flags["close_animation_style"] = {"None"}
     end
+    
+    if ui.flags["ui_transparency_enabled"] == nil then
+        ui.flags["ui_transparency_enabled"] = false
+    end
+    
+    if mainFrame then
+        mainFrame.GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0
+    end
+end
+
+function ui:SetTransparency(enabled)
+    ui.flags["ui_transparency_enabled"] = enabled
+    local config = ui._internal.config
+    if not config then return end
+    
+    local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
+    local mainFrame = gui and gui:FindFirstChild("MainFrame")
+    if mainFrame then
+        local target = enabled and 0.35 or 0
+        TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = target}):Play()
+    end
+    ui:SaveConfig()
 end
 
 function ui:CreateTab(name)
@@ -648,13 +679,16 @@ function ui:CreateTab(name)
     local theme = ui._internal.theme
     local tablistIndex = #tabList:GetChildren() + 1
 
+    -- สร้างตัวแปรสีเทาสว่างสำหรับปุ่ม Tab ที่ยังไม่ได้ถูกเลือก (มองเห็นชัดกว่าเดิมมาก)
+    local unselectedTextColor = Color3.fromRGB(165, 170, 180) 
+
     local button = Instance.new("TextButton")
     button.Name = "Tab_" .. name
     button.Size = UDim2.new(1, 0, 0, 32)
     button.BackgroundTransparency = 1
     button.Text = name
     button.TextSize = 14
-    button.TextColor3 = theme.Sub
+    button.TextColor3 = unselectedTextColor -- เปลี่ยนจาก theme.Sub เป็นสีเทาสว่าง
     button.Font = Enum.Font.GothamSemibold
     button.LayoutOrder = tablistIndex
     button.ZIndex = 6
@@ -691,7 +725,7 @@ function ui:CreateTab(name)
 
     button.MouseButton1Click:Connect(function()
         if ui._internal.selectedButton then
-            ui._internal.selectedButton.TextColor3 = theme.Sub
+            ui._internal.selectedButton.TextColor3 = unselectedTextColor -- คืนค่าสีเทาสว่างเมื่อปุ่มนี้ไม่ได้ถูกเลือกแล้ว
             ui._internal.selectedButton.BackgroundTransparency = 1
             if ui._internal.selectedPage then ui._internal.selectedPage.Visible = false end
         end
@@ -805,7 +839,6 @@ function ui:CreateTab(name)
             task.spawn(function() pcall(function() callback(ui.flags[flag]) end) end)
         end
     end
-
 
     function pageObj:AddSlider(text, flag, min, max, default, callback)
         local row = Instance.new("Frame")
@@ -1065,8 +1098,7 @@ function ui:CreateTab(name)
         searchBox.TextSize = 12
         searchBox.ZIndex = 11
         searchBox.ClearTextOnFocus = false
-        searchBox.Parent = searchWrapper
-        Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 4)
+        searchBox.Parent = searchBox.Parent
 
         local function updateMainLabel(arrow)
             arrow = arrow or "▼"
