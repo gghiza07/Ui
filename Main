@@ -1,4 +1,4 @@
-Local CoreGui = game:GetService("CoreGui")
+local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService") 
@@ -972,28 +972,6 @@ function ui:CreateTab(name)
         updateSlider(ui.flags[flag])
     end
     
-    function pageObj:Button(text, callback)
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -6, 0, 36)
-        row.BackgroundTransparency = 1
-        row.Parent = page
-
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 1, 0)
-        btn.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
-        btn.Text = text
-        btn.TextSize = 14
-        btn.TextColor3 = theme.Text
-        btn.Font = Enum.Font.GothamSemibold
-        btn.ZIndex = 7
-        btn.Parent = row
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
-        btn.MouseButton1Click:Connect(function()
-            pcall(function() callback() end)
-        end)
-    end
-
     function pageObj:Input(text, flag, default, callback)
         local row = Instance.new("Frame")
         row.Size = UDim2.new(1, -6, 0, 44)
@@ -1159,14 +1137,6 @@ function ui:CreateTab(name)
             for _, btn in pairs(optButtons) do btn:Destroy() end
             table.clear(optButtons)
             table.clear(optVisuals)
-
-            if multi then
-                if ui.flags[flag] == nil or type(ui.flags[flag]) ~= "table" then ui.flags[flag] = {} end
-            else
-                if ui.flags[flag] == nil or type(ui.flags[flag]) == "table" then 
-                    ui.flags[flag] = optionList[1] or "None"
-                end
-            end
             
             for _, opt in ipairs(optionList) do
                 local optBtn = Instance.new("TextButton")
@@ -1181,7 +1151,7 @@ function ui:CreateTab(name)
 
                 local function updateOptVisual()
                     if multi then
-                        if ui.flags[flag][opt] then
+                        if ui.flags[flag] and ui.flags[flag][opt] then
                             optBtn.TextColor3 = theme.Accent
                             optBtn.Text = "   ✓ " .. tostring(opt)
                         else
@@ -1248,7 +1218,7 @@ function ui:CreateTab(name)
         searchBox:GetPropertyChangedSignal("Text"):Connect(function()
             local query = string.lower(searchBox.Text)
             for opt, btn in pairs(optButtons) do
-                if query == "" or string.find(string.lower(tostring(opt)), query) then
+                if query == "" or string.find(string.lower(tostring(opt)), query, 1, true) then
                     btn.Visible = true
                 else
                     btn.Visible = false
@@ -1257,10 +1227,9 @@ function ui:CreateTab(name)
             resizeDropdown()
         end)
         
-        dropdownObj:Refresh(options)
-        
         if multi then
-            if ui.flags[flag] == nil or table.create == nil then 
+            if ui.flags[flag] == nil or type(ui.flags[flag]) ~= "table" then
+                ui.flags[flag] = {}
                 if type(default) == "table" then
                     for _, v in ipairs(default) do ui.flags[flag][v] = true end
                 elseif type(default) == "string" and default ~= "" then
@@ -1268,8 +1237,9 @@ function ui:CreateTab(name)
                 end
             end
         else
-            if default and default ~= "" and ui.flags[flag] == options[1] then
-                ui.flags[flag] = default
+            if ui.flags[flag] == nil then
+                local firstOpt = type(options) == "table" and options[1] or "None"
+                ui.flags[flag] = (default and default ~= "") and default or firstOpt
             end
         end
         
@@ -1278,6 +1248,12 @@ function ui:CreateTab(name)
         
         return dropdownObj
     end
+
+    pageObj.Button = pageObj.AddButton
+    pageObj.Toggle = pageObj.AddToggle
+    pageObj.Slider = pageObj.AddSlider
+    pageObj.AddInput = pageObj.Input
+    pageObj.AddDropdown = pageObj.Dropdown
 
     return pageObj
 end
