@@ -1,0 +1,983 @@
+local ui = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/gghiza07/Ui@4a6b521/Main"))()
+
+local Window = ui:CreateWindow({
+    Name = "Wiv Hub",
+    Map = "Rock Fruit",
+    Text = "v0.0.2",
+    Save = {
+        SaveConfig = true,
+        SaveFolder = "Wiv hub",
+        SaveFile = "",
+        Fixbug = false
+    },
+    Key = {
+        ToggleKey = Enum.KeyCode.RightControl
+    }
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
+
+local ActionRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Action")
+local NetworkEvent = ReplicatedStorage:WaitForChild("Modules"):WaitForChild("NetworkFramework"):WaitForChild("NetworkEvent")
+local SystemRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("System")
+
+local gmt = getrawmetatable(game)
+setreadonly(gmt, false)
+local oldNamecall = gmt.__namecall
+
+gmt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if self == ActionRemote and method == "FireServer" then
+        return oldNamecall(self, unpack(args))
+    end
+    return oldNamecall(self, ...)
+end)
+setreadonly(gmt, true)
+
+getgenv().Autofarm = false
+getgenv().AutoStats = false
+getgenv().AutoChest = false
+getgenv().AutoCraft = false
+getgenv().AutoFarmItem = false
+getgenv().AutoFarmBoss = false
+getgenv().AutoSummonBoss = false
+getgenv().AutoRebirth = false
+
+getgenv().AutoSkillMaster = false
+getgenv().AutoSkillZ = false
+getgenv().AutoSkillX = false
+getgenv().AutoSkillC = false
+getgenv().AutoSkillV = false
+getgenv().ShowDashboard = false
+getgenv().IsTransitioning = false
+
+local SelectedStat = {"Melee"}
+local SelectedWeapon = "None"
+local StatAmount = 1
+local ChestAmount = "x15"
+local SelectedCraftItem = "None"
+local SelectedFarmItem = "None"
+local SelectedBoss = "None"
+local SelectedSummonBoss = "GooGooGaaGaa"
+local ItemFarmLimit = 10
+local FarmingBeliForCraft = false
+local FarmPosition = "Above"
+local FarmDistance = 4
+
+local CraftFarmItem = "None"
+local CraftFarmLimit = 0
+
+local TargetMob = nil
+local currentTier = nil
+
+local lastMobTime = 0 
+local spawnDelayThreshold = 1.5 
+
+local farmThread = nil
+local craftThread = nil
+local attackThread = nil
+local statsThread = nil
+local chestThread = nil
+local summonThread = nil
+local rebirthThread = nil
+local dashboardThread = nil
+local lastEquipTime = 0
+
+local CraftDatabase = {
+    ["Boxing"] = { Materials = { ["Beli"] = 15000, ["Boxing Sandbag"] = 5, ["Boxing Gloves"] = 2, ["Dumbbell"] = 1 } },
+    ["Tanto"] = { Materials = { ["Beli"] = 2500, ["Wood"] = 10, ["Bandage"] = 15, ["Iron"] = 5 } },
+    ["Super Bacon"] = { Materials = { ["Beli"] = 25000000, ["Bacon Rainbow"] = 15, ["Bacon"] = 1, ["Bacon Black"] = 20 } },
+    ["Katana"] = { Materials = { ["Beli"] = 25000, ["Wood"] = 25, ["Iron"] = 15, ["Tanto"] = 1 } },
+    ["Black Leg"] = { Materials = { ["Beli"] = 250000, ["Khaw Phad Kai"] = 5, ["Orb Fire"] = 75, ["Chef Hat"] = 1, ["Black Shoes"] = 2 }},
+    ["Shisui"] = { Materials = { ["Beli"] = 3500000, ["Old Wood"] = 40, ["Black Iron"] = 75, ["Katana"] = 1, ["Gold"] = 20, ["Orb Red"] = 35 } },
+    ["Kitetsu"] = { Materials = { ["Beli"] = 1500000, ["Cursed Iron"] = 15, ["Katana"] = 1, ["Orb Spirit"] = 20, ["Cursed Wood"] = 15 } },
+    ["Michale Jackson"] = { Materials = { ["Beli"] = 10000000, ["Orb Dark"] = 25, ["Thompson Gun"] = 25, ["Microphone"] = 10, ["Boxing"] = 1 }},
+    ["Kiribachi"] = { Materials = { ["Beli"] = 500000, ["Iron Shark Teeth"] = 12, ["Old Wood"] = 5, ["Gold"] = 15 }},
+    ["Shirasaya"] = { Materials = { ["Beli"] = 100000, ["Old Iron"] = 25, ["Katana"] = 1, ["Old Wood"] = 30, ["Old Rock"] = 50 }},
+    ["Karate Fish"] = { Materials = { ["Beli"] = 100000, ["Fish"] = 25, ["Black Belt"] = 7, ["Orb Water"] = 50 }},
+    ["Wado"] = { Materials = { ["Beli"] = 2500000, ["Wind Stone"] = 35, ["Katana"] = 1, ["Old Wood"] = 25, ["Holy Iron"] = 50 }},
+    ["Rokushiki"] = { Materials = { ["Beli"] = 15000000, ["Book of Rokuogan"] = 100, ["Boxing"] = 1 }},
+    ["Yoru"] = { Materials = { ["Beli"] = 9500000, ["Holy Iron"] = 75, ["Holy Wood"] = 75, ["Orb Black"] = 75, ["Orb Green"] = 75 }}
+}
+
+local ItemDatabase = {
+    ["Bacon"] = { Npc = "NPC_Quest1", Items = {"Wood", "Bandage", "Bacon"}},
+    ["Bacon Strong"] = { Npc = "NPC_Quest2", Items = {"Boxing Gloves", "Boxing Sandbag", "Dumbbell 25 KG"}},
+    ["Bacon Traveler"] = { Npc = "NPC_Quest3", Items = {"Pipe", "Iron"}},
+    ["Bacon Fawkes"] = { Npc = "NPC_Quest4", Items = {"Gold", "Black Belt"}},
+    ["Bacon Pirate"] = { Npc = "NPC_Quest5", Items = {"Iron Shark Teeth"}},
+    ["Bacon Clown"] = { Npc = "NPC_Quest6", Items = {"Orb Spirit"}},
+    ["Bacon Tarzan"] = { Npc = "NPC_Quest7", Items = {"Old Rock", "Old Wood"}},
+    ["Gorilla"] = { Npc = "NPC_Quest8", Items = {"Orb Black", "Old Iron"}},
+    ["Bacon Fisherman"] = { Npc = "NPC_Quest9", Items = {"Fish"}},
+    ["Bacon The Deep"] = { Npc = "NPC_Quest10", Items = {"Orb Water"}},
+    ["Bacon Marine"] = { Npc = "NPC_Quest11", Items = {"Chef Hat", "Black Shoes"}},
+    ["Bacon Marine Captain"] = { Npc = "NPC_Quest12", Items = {"Holy Wood", "Orb Green"}},
+    ["Bacon Rock"] = { Npc = "NPC_Quest13", Items = {"Holy Stone"}},
+    ["Bacon Iron"] = { Npc = "NPC_Quest14", Items = {"Holy Iron"}},
+    ["Bacon Minerals"] = { Npc = "NPC_Quest15", Items = {"Holy Gold", "Black Iron"}},
+    ["Bacon Kryptonite"] = { Npc = "NPC_Quest16", Items = {"Wind Stone", "Orb Red"}},
+    ["Bacon Snow"] = { Npc = "NPC_Quest17", Items = {"Khaw Phad Kai", "Book of Rokuogan"}},
+    ["Bacon Ice"] = { Npc = "NPC_Quest18", Items = {"Cursed Wood", "Cursed Iron"}},
+    ["Bacon Lava"] = { Npc = "NPC_Quest19", Items = {"Orb Fire"}},
+    ["Bacon Hellfire"] = { Npc = "NPC_Quest20", Items = {"Orb Dragon", "Dragon Fang"}},
+    ["Bacon Jackson"] = {Npc = "Jackson Man", Items = {"Microphone", "Thompson Gun"}},
+    ["Bacon Monster"] = {Npc = "Jackson Man", Items = {"Heart of Envy", "Cake Monster"}}
+}
+
+local levelconfig = {
+    {lvl = 1, lvm = 1000, Mon = "Bacon", Npc = "NPC_Quest1"},
+    {lvl = 1001, lvm = 2000, Mon = "Bacon Strong", Npc = "NPC_Quest2"},
+    {lvl = 2001, lvm = 3000, Mon = "Bacon Traveler", Npc = "NPC_Quest3"},
+    {lvl = 3001, lvm = 4000, Mon = "Bacon Fawkes", Npc = "NPC_Quest4"},
+    {lvl = 4001, lvm = 5000, Mon = "Bacon Pirate", Npc = "NPC_Quest5"},
+    {lvl = 5001, lvm = 6000, Mon = "Bacon Clown", Npc = "NPC_Quest6"},
+    {lvl = 6001, lvm = 7000, Mon = "Bacon Tarzan", Npc = "NPC_Quest7"},
+    {lvl = 7001, lvm = 8000, Mon = "Gorilla", Npc = "NPC_Quest8"},
+    {lvl = 8000, lvm = 9000, Mon = "Bacon Fisherman", Npc = "NPC_Quest9"},
+    {lvl = 9001, lvm = 10000, Mon = "Bacon The Deep", Npc = "NPC_Quest10"},
+    {lvl = 10001, lvm = 11000, Mon = "Bacon Marine", Npc = "NPC_Quest11"},
+    {lvl = 11001, lvm = 12000, Mon = "Bacon Marine Captain", Npc = "NPC_Quest12"},
+    {lvl = 12001, lvm = 13000, Mon = "Bacon Rock", Npc = "NPC_Quest13"},
+    {lvl = 13001, lvm = 14000, Mon = "Bacon Iron", Npc = "NPC_Quest14"},
+    {lvl = 14001, lvm = 15000, Mon = "Bacon Minerals", Npc = "NPC_Quest15"},
+    {lvl = 15001, lvm = 16000, Mon = "Bacon Kryptonite", Npc = "NPC_Quest16"},
+    {lvl = 16001, lvm = 17000, Mon = "Bacon Snow", Npc = "NPC_Quest17"},
+    {lvl = 17001, lvm = 18000, Mon = "Bacon Ice", Npc = "NPC_Quest18"},
+    {lvl = 18001, lvm = 19000, Mon = "Bacon Lava", Npc = "NPC_Quest19"},
+    {lvl = 19001, lvm = 21500, Mon = "Bacon Hellfire", Npc = "NPC_Quest20"}
+}
+
+local DashGui = Instance.new("ScreenGui")
+local DashFrame = Instance.new("Frame")
+local DashTitle = Instance.new("TextLabel")
+local DashScroll = Instance.new("ScrollingFrame")
+local DashListLayout = Instance.new("UIListLayout")
+
+DashGui.Name = "Wiv_Dashboard_Sys"
+DashGui.Parent = CoreGui
+DashGui.ResetOnSpawn = false
+DashGui.Enabled = false
+
+DashFrame.Name = "DashFrame"
+DashFrame.Parent = DashGui
+DashFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+DashFrame.BorderSizePixel = 0
+DashFrame.Position = UDim2.new(0.75, 0, 0.3, 0)
+DashFrame.Size = UDim2.new(0, 240, 0, 200)
+DashFrame.Active = true
+DashFrame.Draggable = true
+
+DashTitle.Name = "DashTitle"
+DashTitle.Parent = DashFrame
+DashTitle.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+DashTitle.BorderSizePixel = 0
+DashTitle.Size = UDim2.new(1, 0, 0, 30)
+DashTitle.Font = Enum.Font.SourceSansBold
+DashTitle.Text = "CRAFT TRACKER"
+DashTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DashTitle.TextSize = 14
+
+DashScroll.Name = "DashScroll"
+DashScroll.Parent = DashFrame
+DashScroll.BackgroundTransparency = 1
+DashScroll.BorderSizePixel = 0
+DashScroll.Position = UDim2.new(0, 5, 0, 35)
+DashScroll.Size = UDim2.new(1, -10, 1, -40)
+DashScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+DashScroll.ScrollBarThickness = 4
+
+DashListLayout.Parent = DashScroll
+DashListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+DashListLayout.Padding = UDim.new(0, 4)
+
+local function Level()
+    local hud = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("HUD")
+    if hud and hud.Main.Frame_Display.LevelText then
+        return tonumber(string.match(hud.Main.Frame_Display.LevelText.Text, "%d+")) or 1
+    end
+    return 1
+end
+
+local function getMaxLevel()
+    if #levelconfig > 0 then
+        return levelconfig[#levelconfig].lvm
+    end
+    return 0
+end
+
+local function getMon()
+    local lv = Level()
+    for i, config in pairs(levelconfig) do
+        if lv >= config.lvl and lv <= config.lvm then return config.Mon, config.Npc, i end
+    end
+    return nil, nil, nil
+end
+
+local function parseNumberString(text)
+    if not text then return 0 end
+    local cleanText = string.gsub(text, ",", "")
+    local numStr = string.match(cleanText, "[%d%.]+")
+    local num = tonumber(numStr) or 0
+    
+    local upperText = string.upper(cleanText)
+    if string.find(upperText, "T") then
+        num = num * 1000000000000
+    elseif string.find(upperText, "B") then
+        num = num * 1000000000
+    elseif string.find(upperText, "M") then
+        num = num * 1000000
+    elseif string.find(upperText, "K") then
+        num = num * 1000
+    end
+    
+    return math.floor(num + 0.5)
+end
+
+local function getBeliAmount()
+    local amount = 0
+    pcall(function()
+        local display = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_Display")
+        local beliTextObj = display and display.Currency.Beli.BeliText
+        if beliTextObj then
+            amount = parseNumberString(beliTextObj.Text)
+        end
+    end)
+    return amount
+end
+
+local function findMobByItem(itemName)
+    for mobName, data in pairs(ItemDatabase) do
+        if table.find(data.Items, itemName) then return mobName, data.Npc end
+    end
+    return nil, nil
+end
+
+local function getItemAmount(itemName)
+    local amount = 0
+    pcall(function()
+        local inventory = LocalPlayer.PlayerGui.HUD.Main.Frame_Inventory.Handler.InventoryHandler.ScrollingFrame
+        local itemObj = inventory:FindFirstChild(itemName)
+        if itemObj and itemObj.Main:FindFirstChild("Amount") then
+            amount = parseNumberString(itemObj.Main.Amount.Text)
+        end
+    end)
+    return amount
+end
+
+local function checkOwnedItem(itemName)
+    if not itemName or itemName == "None" then return false end
+    if LocalPlayer.Backpack:FindFirstChild(itemName) or LocalPlayer.Character:FindFirstChild(itemName) then return true end
+    local isOwned = false
+    pcall(function()
+        if LocalPlayer.PlayerGui.HUD.Main.Frame_Inventory.Handler.InventoryHandler.ScrollingFrame:FindFirstChild(itemName) then
+            isOwned = true
+        end
+    end)
+    return isOwned
+end
+
+local function getAvailableWeapons()
+    local weapons = {"None"}
+    local function checkFolder(folder)
+        for _, v in ipairs(folder:GetChildren()) do
+            if v:IsA("Tool") and not table.find(weapons, v.Name) then table.insert(weapons, v.Name) end
+        end
+    end
+    checkFolder(LocalPlayer.Backpack)
+    if LocalPlayer.Character then checkFolder(LocalPlayer.Character) end
+    return weapons
+end
+
+local function equipAndGetWeapon()
+    local weaponName = SelectedWeapon
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChildOfClass("Humanoid") then return nil end
+    if not weaponName or weaponName == "None" or weaponName == "" then
+        local currentTool = character:FindFirstChildOfClass("Tool")
+        return currentTool and currentTool.Name
+    end
+    if character:FindFirstChild(weaponName) then return weaponName end
+    local backpackTool = LocalPlayer.Backpack:FindFirstChild(weaponName)
+    if backpackTool and character.Humanoid.Health > 0 then
+        if os.clock() - lastEquipTime > 0.3 then
+            lastEquipTime = os.clock()
+            character.Humanoid:EquipTool(backpackTool)
+        end
+        return weaponName
+    end
+    return nil
+end
+
+local function realHoldButton(btn)
+    if btn and btn.Visible then
+        pcall(function()
+            if firesignal then
+                firesignal(btn.MouseButton1Click)
+                firesignal(btn.Activated)
+            else
+                local inset, _ = GuiService:GetGuiInset()
+                local x = btn.AbsolutePosition.X + (btn.AbsoluteSize.X / 2) + inset.X
+                local y = btn.AbsolutePosition.Y + (btn.AbsoluteSize.Y / 2) + inset.Y
+                VirtualInputManager:SendTouchEvent(1, 0, x, y)
+                task.wait(0.05)
+                VirtualInputManager:SendTouchEvent(1, 2, x, y)
+            end
+        end)
+    end
+end
+
+local function autoDetectType(itemName)
+    local swordFolder = ReplicatedStorage:WaitForChild("Weapon"):FindFirstChild("Sword")
+    if swordFolder and swordFolder:FindFirstChild(itemName) then return "Sword" end
+    return "Melee"
+end
+
+local function getAllMissingMaterials(itemName, list)
+    list = list or {}
+    if checkOwnedItem(itemName) then return list end
+    local recipeData = CraftDatabase[itemName]
+    if not recipeData then return list end
+    
+    local mats = recipeData.Materials
+    if not mats then return list end
+
+    for mat, needed in pairs(mats) do
+        if mat ~= "Beli" then
+            if CraftDatabase[mat] then
+                if not checkOwnedItem(mat) then
+                    getAllMissingMaterials(mat, list)
+                end
+            else
+                local currentAmt = getItemAmount(mat)
+                if currentAmt < needed then
+                    table.insert(list, {Name = mat, Needed = needed, Current = currentAmt})
+                end
+            end
+        end
+    end
+    return list
+end
+
+local function getCurrentCraftTarget(itemName)
+    if checkOwnedItem(itemName) then return nil end
+    local recipeData = CraftDatabase[itemName]
+    if not recipeData then return nil end
+    
+    local missing = getAllMissingMaterials(itemName)
+    
+    if #missing > 0 then
+        local FolderMon = workspace:FindFirstChild("Mob") or workspace
+        for _, matData in ipairs(missing) do
+            local mobName, npcName = findMobByItem(matData.Name)
+            if mobName then
+                for _, m in ipairs(FolderMon:GetChildren()) do
+                    if m.Name == mobName and m:FindFirstChildOfClass("Humanoid") and m.Humanoid.Health > 0 and m:FindFirstChild("HumanoidRootPart") then
+                        if m.HumanoidRootPart.Position.Y > -500 then
+                            return "farm", matData.Name, matData.Needed
+                        end
+                    end
+                end
+            end
+        end
+        
+        local firstMissing = missing[1]
+        return "farm", firstMissing.Name, firstMissing.Needed
+    end
+    
+    local mats = recipeData.Materials
+    local beliNeeded = mats and mats["Beli"] or 0
+    if getBeliAmount() < beliNeeded then 
+        return "beli", "Beli", beliNeeded 
+    end
+    
+    return "craft", itemName, 1
+end
+
+local function updateDashboardUI()
+    for _, child in ipairs(DashScroll:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    
+    if SelectedCraftItem == "None" or checkOwnedItem(SelectedCraftItem) then
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, 0, 0, 25)
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.SourceSans
+        lbl.Text = SelectedCraftItem == "None" and "Please Select Item to Craft" or "Item Already Crafted!"
+        lbl.TextColor3 = Color3.fromRGB(150, 150, 150)
+        lbl.TextSize = 14
+        lbl.Parent = DashScroll
+        DashScroll.CanvasSize = UDim2.new(0, 0, 0, 25)
+        return
+    end
+
+    local recipeData = CraftDatabase[SelectedCraftItem]
+    if not recipeData then return end
+    local mats = recipeData.Materials
+    if not mats then return end
+
+    local totalHeight = 0
+    for matName, neededAmt in pairs(mats) do
+        local currentAmt = 0
+        local isBeli = (matName == "Beli")
+        
+        if isBeli then
+            currentAmt = getBeliAmount()
+        else
+            currentAmt = getItemAmount(matName)
+        end
+        
+        local missingAmt = neededAmt - currentAmt
+        if missingAmt < 0 then missingAmt = 0 end
+        
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, 0, 0, 25)
+        lbl.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        lbl.BorderSizePixel = 0
+        lbl.Font = Enum.Font.SourceSans
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        
+        if missingAmt == 0 then
+            lbl.Text = "  " .. matName .. ": DONE (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.TextColor3 = Color3.fromRGB(50, 220, 50)
+        else
+            lbl.Text = "  " .. matName .. ": Need " .. missingAmt .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.TextColor3 = Color3.fromRGB(220, 50, 50)
+        end
+        
+        lbl.TextSize = 13
+        lbl.Parent = DashScroll
+        totalHeight = totalHeight + 29
+    end
+    
+    DashScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+
+local function executeCraftingCheck()
+    if not getgenv().AutoCraft or SelectedCraftItem == "None" then
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        return
+    end
+
+    if checkOwnedItem(SelectedCraftItem) then
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        getgenv().AutoCraft = false
+        return
+    end
+
+    local actionType, targetName, amountNeeded = getCurrentCraftTarget(SelectedCraftItem)
+
+    if actionType == "beli" then
+        FarmingBeliForCraft = true
+        CraftFarmItem = "None"
+    elseif actionType == "farm" then
+        FarmingBeliForCraft = false
+        CraftFarmItem = targetName
+        CraftFarmLimit = amountNeeded
+    elseif actionType == "craft" then
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        TargetMob = nil
+        NetworkEvent:FireServer("fire", nil, "Craft", targetName, autoDetectType(targetName))
+        task.wait(0.5)
+    elseif actionType == "unfarmable" then
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        getgenv().AutoCraft = false 
+    end
+end
+
+local function determineFarmTarget()
+    local Mon, Npc, tierIndex = nil, nil, nil
+
+    if getgenv().AutoFarmBoss and SelectedBoss ~= "None" then
+        Mon = SelectedBoss
+        tierIndex = "Boss_" .. SelectedBoss
+    end
+
+    if not Mon and getgenv().AutoCraft and SelectedCraftItem ~= "None" then
+        if FarmingBeliForCraft then
+            Mon, Npc, _ = getMon()
+            tierIndex = "Beli_Farm_Level"
+        elseif CraftFarmItem ~= "None" then
+            local monName, npcName = findMobByItem(CraftFarmItem)
+            if monName then Mon = monName Npc = npcName tierIndex = "CraftItem_" .. CraftFarmItem end
+        end
+    end
+
+    if not Mon and getgenv().AutoFarmItem and SelectedFarmItem ~= "None" then
+        if getItemAmount(SelectedFarmItem) < ItemFarmLimit then
+            local monName, npcName = findMobByItem(SelectedFarmItem)
+            if monName then Mon = monName Npc = npcName tierIndex = "ManualItem_" .. SelectedFarmItem end
+        end
+    end
+
+    if not Mon and getgenv().Autofarm then
+        Mon, Npc, _ = getMon()
+        tierIndex = "Level_Farm"
+    end
+
+    return Mon, Npc, tierIndex
+end
+
+local function executeFarmingCycle()
+    local Mon, Npc, tierIndex = determineFarmTarget()
+    if not Mon or Mon == "" then TargetMob = nil return end
+
+    pcall(function()
+        local character = LocalPlayer.Character
+        if not character or not character:FindFirstChild("Humanoid") or character.Humanoid.Health <= 0 then TargetMob = nil return end
+        
+        local FolderMon = workspace:FindFirstChild("Mob") or workspace
+        if tierIndex and tierIndex:find("Boss_") then
+            FolderMon = workspace:FindFirstChild("Boss") or FolderMon
+        end
+        
+        local questFrame = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_Quest")
+        if questFrame and questFrame.Visible and questFrame:FindFirstChild("Title") then
+            local questTitle = questFrame.Title.Text
+            if not string.find(questTitle, Mon) then
+                getgenv().IsTransitioning = true
+                TargetMob = nil
+                NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                questFrame.Visible = false
+                task.wait(0.3)
+                getgenv().IsTransitioning = false
+            end
+        end
+
+        if currentTier ~= tierIndex then
+            getgenv().IsTransitioning = true
+            TargetMob = nil
+            NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+            if LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_Quest") then LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible = false end
+            task.wait(0.3)
+            currentTier = tierIndex
+            getgenv().IsTransitioning = false
+        end
+
+        local hasQuest = LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible
+        local npc = Npc and workspace:FindFirstChild("NpcQuest") and workspace.NpcQuest:FindFirstChild(Npc)
+        
+        local shouldAcceptQuest = false
+        if tierIndex == "Level_Farm" or tierIndex == "Beli_Farm_Level" then
+            shouldAcceptQuest = true
+        end
+        
+        if shouldAcceptQuest and not hasQuest and npc and npc:FindFirstChild("HumanoidRootPart") then
+            getgenv().IsTransitioning = true
+            TargetMob = nil
+            character.Humanoid.PlatformStand = true
+            character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+            character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+            character.HumanoidRootPart.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3) 
+            task.wait(0.3) 
+            
+            if fireproximityprompt then
+                for _, v in ipairs(npc:GetDescendants()) do if v:IsA("ProximityPrompt") then fireproximityprompt(v) task.wait(0.05) end end
+            end
+            task.wait(0.3)
+            
+            for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                if v:IsA("TextButton") and v.Visible then
+                    local name, text = v.Name:lower(), v.Text:lower()
+                    if name:find("accept") or name:find("quest") or text:find("accept") or text:find("รับ") then
+                        realHoldButton(v)
+                        task.wait(0.2)
+                        break
+                    end
+                end
+            end
+            getgenv().IsTransitioning = false
+            return
+        end
+
+        local foundMob = nil
+        for _, mob in ipairs(FolderMon:GetChildren()) do
+            if mob.Name == Mon and mob:FindFirstChildOfClass("Humanoid") and mob.Humanoid.Health > 0 and mob:FindFirstChild("HumanoidRootPart") then
+                if mob.HumanoidRootPart.Position.Y > -500 then
+                    foundMob = mob
+                    break
+                end
+            end
+        end
+
+        if not foundMob then
+            TargetMob = nil
+            return
+        end
+
+        TargetMob = foundMob
+    end)
+end
+
+local function startAttackLoop()
+    if attackThread then return end
+    attackThread = task.spawn(function()
+        while getgenv().Autofarm or getgenv().AutoFarmItem or getgenv().AutoCraft or getgenv().AutoFarmBoss do
+            if TargetMob and TargetMob:FindFirstChildOfClass("Humanoid") and TargetMob.Humanoid.Health > 0 then
+                pcall(function()
+                    local weapon = equipAndGetWeapon()
+                    if weapon then ActionRemote:FireServer(weapon, "hit") end
+                end)
+            else
+                TargetMob = nil
+            end
+            task.wait(0.02)
+        end
+        attackThread = nil
+    end)
+end
+
+task.spawn(function()
+    while true do
+        if getgenv().AutoSkillMaster or getgenv().Autofarm or getgenv().AutoFarmItem or getgenv().AutoCraft or getgenv().AutoFarmBoss then
+            local weapon = equipAndGetWeapon()
+            if weapon and weapon ~= "None" and weapon ~= "" then
+                pcall(function()
+                    if getgenv().AutoSkillZ then ActionRemote:FireServer(weapon, "z") end
+                    if getgenv().AutoSkillX then ActionRemote:FireServer(weapon, "x") end
+                    if getgenv().AutoSkillC then ActionRemote:FireServer(weapon, "c") end
+                    if getgenv().AutoSkillV then ActionRemote:FireServer(weapon, "v") end
+                end)
+            end
+        end
+        task.wait(0.01)
+    end
+end)
+
+local function startMainFarmLoop()
+    if farmThread then return end
+    farmThread = task.spawn(function()
+        while getgenv().Autofarm or getgenv().AutoFarmItem or getgenv().AutoCraft or getgenv().AutoFarmBoss do
+            executeFarmingCycle()
+            task.wait(0.05)
+        end
+        TargetMob = nil
+        currentTier = nil
+        farmThread = nil
+    end)
+end
+
+local function startCraftLoop()
+    if craftThread then return end
+    craftThread = task.spawn(function()
+        while getgenv().AutoCraft do
+            executeCraftingCheck()
+            task.wait(0.1)
+        end
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        craftThread = nil
+    end)
+end
+
+local function startSummonLoop()
+    if summonThread then return end
+    summonThread = task.spawn(function()
+        while getgenv().AutoSummonBoss do
+            if SelectedSummonBoss ~= "None" then
+                local bossFolder = workspace:FindFirstChild("Boss")
+                local bossExists = false
+                
+                if bossFolder and bossFolder:FindFirstChild(SelectedSummonBoss) then
+                    local b = bossFolder[SelectedSummonBoss]
+                    if b:FindFirstChildOfClass("Humanoid") and b.Humanoid.Health > 0 then
+                        bossExists = true
+                    end
+                end
+                
+                if not bossExists then
+                    NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
+                    task.wait(3)
+                end
+            end
+            task.wait(0.5)
+        end
+        summonThread = nil
+    end)
+end
+
+local function startRebirthLoop()
+    if rebirthThread then return end
+    rebirthThread = task.spawn(function()
+        while getgenv().AutoRebirth do
+            pcall(function()
+                local maxLvl = getMaxLevel()
+                if maxLvl > 0 and Level() >= maxLvl then
+                    NetworkEvent:FireServer("fire", nil, "Rebirth")
+                end
+            end)
+            task.wait(0.5)
+        end
+        rebirthThread = nil
+    end)
+end
+
+local function startDashboardLoop()
+    if dashboardThread then return end
+    dashboardThread = task.spawn(function()
+        while getgenv().ShowDashboard do
+            pcall(updateDashboardUI)
+            task.wait(1)
+        end
+        dashboardThread = nil
+    end)
+end
+
+RunService.Heartbeat:Connect(function()
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChildOfClass("Humanoid") then return end
+    
+    if character.HumanoidRootPart.Position.Y < -500 or character.HumanoidRootPart.Position.Y > 10000 then
+        TargetMob = nil
+        character.Humanoid.PlatformStand = false
+        character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+        character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0) 
+        return
+    end
+    if getgenv().IsTransitioning then
+        character.Humanoid.PlatformStand = true
+        character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+        character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+        return
+    end
+
+    if (getgenv().Autofarm or getgenv().AutoFarmItem or getgenv().AutoCraft or getgenv().AutoFarmBoss) then
+        if character.Humanoid.Health > 0 then
+            if TargetMob and TargetMob:FindFirstChild("HumanoidRootPart") and TargetMob:FindFirstChildOfClass("Humanoid") and TargetMob.Humanoid.Health > 0 then
+                if TargetMob.HumanoidRootPart.Position.Y < -500 then
+                    TargetMob = nil
+                    return
+                end
+
+                lastMobTime = os.clock()
+                
+                character.Humanoid.PlatformStand = true
+                character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+                
+                local offset = Vector3.new(0, FarmDistance, 0)
+                if FarmPosition == "Below" then offset = Vector3.new(0, -FarmDistance, 0)
+                elseif FarmPosition == "Behind" then offset = TargetMob.HumanoidRootPart.CFrame.LookVector * -FarmDistance end
+                
+                character.HumanoidRootPart.CFrame = CFrame.lookAt(character.HumanoidRootPart.Position, TargetMob.HumanoidRootPart.Position)
+                character.HumanoidRootPart.CFrame = CFrame.lookAt(TargetMob.HumanoidRootPart.Position + offset, TargetMob.HumanoidRootPart.Position)
+                workspace.CurrentCamera.CameraSubject = TargetMob.Humanoid
+                return
+            else
+                character.Humanoid.PlatformStand = true
+                character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
+                if os.clock() - lastMobTime < spawnDelayThreshold then
+                    if workspace.CurrentCamera.CameraSubject ~= character.Humanoid then
+                        workspace.CurrentCamera.CameraSubject = character.Humanoid
+                    end
+                    return
+                end
+
+                local Mon, Npc, tierIndex = determineFarmTarget()
+                if Mon and Npc then
+                    local hasQuest = false
+                    pcall(function() hasQuest = LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible end)
+                    local shouldAcceptQuest = (tierIndex == "Level_Farm" or tierIndex == "Beli_Farm_Level")
+                    
+                    if not hasQuest and shouldAcceptQuest then
+                        local npcObj = workspace:FindFirstChild("NpcQuest") and workspace.NpcQuest:FindFirstChild(Npc)
+                        if npcObj and npcObj:FindFirstChild("HumanoidRootPart") then
+                            local aboveNpcPos = npcObj.HumanoidRootPart.Position + Vector3.new(0, 15, 0)
+                            character.HumanoidRootPart.CFrame = CFrame.new(aboveNpcPos) * CFrame.Angles(0, math.rad(180), 0)
+                        end
+                    end
+                end
+                
+                if workspace.CurrentCamera.CameraSubject ~= character.Humanoid then
+                    workspace.CurrentCamera.CameraSubject = character.Humanoid
+                end
+                return
+            end
+        end
+    end
+
+    pcall(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            if LocalPlayer.Character.Humanoid.PlatformStand then LocalPlayer.Character.Humanoid.PlatformStand = false end
+            if workspace.CurrentCamera.CameraSubject ~= LocalPlayer.Character.Humanoid then workspace.CurrentCamera.CameraSubject = LocalPlayer.Character.Humanoid end
+        end
+    end)
+end)
+
+local Tab1 = Window:CreateTab("Main")
+local Tab2 = Window:CreateTab("Skills")
+local Tab3 = Window:CreateTab("Items & Craft")
+local Tab4 = Window:CreateTab("Stats")
+local Tab5 = Window:CreateTab("Settings")
+
+Tab1:AddSection("Level Farming")
+Tab1:AddToggle("Auto Farm Level", "Toggle_Autofarm", false, function(v)
+    getgenv().Autofarm = v
+    if v then
+        startMainFarmLoop()
+        startAttackLoop()
+    end
+end)
+
+Tab1:AddSection("Rebirth")
+Tab1:AddToggle("Auto Rebirth", "Toggle_AutoRebirth", false, function(v)
+    getgenv().AutoRebirth = v
+    if v then
+        startRebirthLoop()
+    end
+end)
+
+local WeaponDropdown = Tab1:Dropdown("Select Weapon", "Dropdown_Weapon", getAvailableWeapons(), "None", false, function(v) SelectedWeapon = v end)
+local function AutoRefreshWeapon() if WeaponDropdown and WeaponDropdown.Refresh then pcall(function() WeaponDropdown:Refresh(getAvailableWeapons()) end) end end
+LocalPlayer.Backpack.ChildAdded:Connect(AutoRefreshWeapon) LocalPlayer.Backpack.ChildRemoved:Connect(AutoRefreshWeapon)
+LocalPlayer.CharacterAdded:Connect(function(char) char.ChildAdded:Connect(AutoRefreshWeapon) char.ChildRemoved:Connect(AutoRefreshWeapon) end)
+
+Tab1:AddSection("Farming Method Settings")
+Tab1:Dropdown("Farm Position", "Dropdown_FarmPosition", {"Above", "Below", "Behind"}, "Above", false, function(v) FarmPosition = v end)
+Tab1:AddSlider("Farm Distance (Studs)", "Slider_FarmDistance", 1, 15, 4, function(v) FarmDistance = tonumber(v) or 4 end)
+
+Tab1:AddSection("Boss Farm")
+Tab1:Dropdown("Select Boss to Summon", "Dropdown_SummonBoss", {"GooGooGaaGaa", "Dark Bacon"}, "GooGooGaaGaa", false, function(v) SelectedSummonBoss = v end)
+Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
+    getgenv().AutoSummonBoss = v
+    if v then
+        startSummonLoop()
+    end
+end)
+Tab2:AddButton("Summon Boss Selected", function()
+    if SelectedSummonBoss ~= "None" then
+        NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
+    end
+end)
+Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
+Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
+    getgenv().AutoFarmBoss = v
+    if v then
+        startMainFarmLoop()
+        startAttackLoop()
+    else
+        TargetMob = nil
+    end
+end)
+
+Tab2:AddSection("Skills")
+Tab2:AddToggle("Master Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
+Tab2:AddToggle("Z", "SkillZ", false, function(v) getgenv().AutoSkillZ = v end)
+Tab2:AddToggle("X", "SkillX", false, function(v) getgenv().AutoSkillX = v end)
+Tab2:AddToggle("C", "SkillC", false, function(v) getgenv().AutoSkillC = v end)
+Tab2:AddToggle("V", "SkillV", false, function(v) getgenv().AutoSkillV = v end)
+
+Tab3:AddSection("Gacha")
+Tab3:Dropdown("Select Chest Amount", "Dropdown_ChestAmount", {"x5", "x10", "x15"}, "x5", false, function(v) ChestAmount = v end)
+Tab3:AddToggle("Auto Open Chest", "Toggle_AutoChest", false, function(v)
+    getgenv().AutoChest = v
+    if v then
+        if chestThread then return end
+        chestThread = task.spawn(function()
+            while getgenv().AutoChest do
+                pcall(function() NetworkEvent:FireServer("fire", nil, "RandomItem", ChestAmount) end)
+                task.wait(0.2)
+            end
+            chestThread = nil
+        end)
+    end
+end)
+
+Tab3:AddSection("Item Farm")
+local farmItemList = {"None"}
+for _, data in pairs(ItemDatabase) do for _, itemName in ipairs(data.Items) do if not table.find(farmItemList, itemName) then table.insert(farmItemList, itemName) end end end
+Tab3:Dropdown("Select Item to Farm", "Dropdown_FarmItem", farmItemList, "None", false, function(v) SelectedFarmItem = v end)
+Tab3:AddSlider("Farming Item Limit", "Slider_ItemLimit", 1, 1000, 10, function(v) ItemFarmLimit = tonumber(v) or 10 end)
+Tab3:AddToggle("Auto Farm Item", "Toggle_AutoFarmItem", false, function(v)
+    getgenv().AutoFarmItem = v
+    if v then
+        startMainFarmLoop()
+        startAttackLoop()
+    else
+        TargetMob = nil
+    end
+end)
+
+Tab3:AddSection("Craft")
+local craftList = {"None"}
+for itemName, _ in pairs(CraftDatabase) do table.insert(craftList, itemName) end
+Tab3:Dropdown("Select Item to Craft", "Dropdown_CraftItem", craftList, "None", false, function(v) SelectedCraftItem = v end)
+Tab3:AddToggle("Auto Craft Item", "Toggle_AutoCraft", false, function(v)
+    getgenv().AutoCraft = v
+    if v then
+        startCraftLoop()
+        startMainFarmLoop()
+        startAttackLoop()
+    else
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        TargetMob = nil
+    end
+end)
+Tab3:AddToggle("Craft Dashboard", "DashboardFrameShow", false, function(v)
+    getgenv().ShowDashboard = v
+    DashGui.Enabled = v
+    if v then
+        startDashboardLoop()
+    end
+end)
+
+Tab4:AddSection("Status")
+Tab4:Dropdown("Select Status", "Dropdown_Stats", {"Melee", "Defense", "Sword", "Power"}, {"Melee"}, true, function(v) SelectedStat = v end)
+Tab4:AddSlider("Upgrade Amount (Slider)", "Slider_StatAmount", 1, 10000, 1, function(v) StatAmount = tonumber(v) or 1 end)
+Tab4:AddToggle("Auto Up Stats", "AutoStats", false, function(v)
+    getgenv().AutoStats = v
+    if v then
+        if statsThread then return end
+        local currentStatIndex = 1
+        statsThread = task.spawn(function()
+            while getgenv().AutoStats do
+                pcall(function()
+                    local enabledStats = {}
+                    if type(SelectedStat) == "table" then
+                        for k, val in pairs(SelectedStat) do 
+                            if val == true then 
+                                table.insert(enabledStats, k) 
+                            elseif type(val) == "string" and val ~= "" then 
+                                table.insert(enabledStats, val) 
+                            end 
+                        end
+                    elseif type(SelectedStat) == "string" and SelectedStat ~= "" then 
+                        table.insert(enabledStats, SelectedStat) 
+                    end
+                    
+                    if #enabledStats > 0 then
+                        if currentStatIndex > #enabledStats then currentStatIndex = 1 end
+                        SystemRemote:FireServer("UpStats", enabledStats[currentStatIndex], StatAmount)
+                        currentStatIndex = currentStatIndex + 1
+                    end
+                end)
+                task.wait(0.05)
+            end
+            statsThread = nil
+        end)
+    end
+end)
+Tab4:AddButton("Reset Status", function() pcall(function() SystemRemote:FireServer("ResetStats") end) end)
+
+Tab5:AddSection("Ui Fixes")
+Tab5:AddToggle("FixUi", "Fixui", false, function(v)
+    if Window and Window.Save then
+        Window.Save.Fixbug = v
+    end
+end)
