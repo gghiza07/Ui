@@ -91,7 +91,7 @@ local dashboardThread = nil
 local lastEquipTime = 0
 
 local CraftDatabase = {
-    ["Boxing"] = { Materials = { ["Beli"] = 15000, ["Boxing Sandbag"] = 5, ["Boxing Gloves"] = 2, ["Dumbbell"] = 1 } },
+    ["Boxing"] = { Materials = { ["Beli"] = 15000, ["Boxing Sandbag"] = 5, ["Boxing Gloves"] = 2, ["Dumbbell 25 KG"] = 1 } },
     ["Tanto"] = { Materials = { ["Beli"] = 2500, ["Wood"] = 10, ["Bandage"] = 15, ["Iron"] = 5 } },
     ["Super Bacon"] = { Materials = { ["Beli"] = 25000000, ["Bacon Rainbow"] = 15, ["Bacon"] = 1, ["Bacon Black"] = 20 } },
     ["Katana"] = { Materials = { ["Beli"] = 25000, ["Wood"] = 25, ["Iron"] = 15, ["Tanto"] = 1 } },
@@ -161,7 +161,7 @@ local DashTitle = Instance.new("TextLabel")
 local DashScroll = Instance.new("ScrollingFrame")
 local DashListLayout = Instance.new("UIListLayout")
 
-DashGui.Name = "Wiv_Dashboard_Sys"
+DashGui.Name = "Dashboard"
 DashGui.Parent = CoreGui
 DashGui.ResetOnSpawn = false
 DashGui.Enabled = false
@@ -859,6 +859,11 @@ Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
         startSummonLoop()
     end
 end)
+Tab2:AddButton("Summon Boss Selected", function()
+    if SelectedSummonBoss ~= "None" then
+        NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
+    end
+end)
 Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
 Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
     getgenv().AutoFarmBoss = v
@@ -871,7 +876,7 @@ Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
 end)
 
 Tab2:AddSection("Skills")
-Tab2:AddToggle("Default Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
+Tab2:AddToggle("Master Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
 Tab2:AddToggle("Z", "SkillZ", false, function(v) getgenv().AutoSkillZ = v end)
 Tab2:AddToggle("X", "SkillX", false, function(v) getgenv().AutoSkillX = v end)
 Tab2:AddToggle("C", "SkillC", false, function(v) getgenv().AutoSkillC = v end)
@@ -912,7 +917,7 @@ Tab3:AddSection("Craft")
 local craftList = {"None"}
 for itemName, _ in pairs(CraftDatabase) do table.insert(craftList, itemName) end
 Tab3:Dropdown("Select Item to Craft", "Dropdown_CraftItem", craftList, "None", false, function(v) SelectedCraftItem = v end)
-Tab3:AddToggle("Auto Craft Item", "Toggle_AutoCraft", false, function(v)
+Tab3:AddToggle("Auto Craft Item", "AutoCraft", false, function(v)
     getgenv().AutoCraft = v
     if v then
         startCraftLoop()
