@@ -12,6 +12,8 @@ local Camera = workspace.CurrentCamera
 local ui = {
     flags = {},
     _internal = {
+        screenGui = nil, -- เพิ่มเพื่อเก็บ Object ตรงๆ ไม่ให้หลุดพาธ
+        mainFrame = nil, -- เพิ่มเพื่อล็อกตัว Frame หลักไว้จัดการ Transparency
         tabList = nil,
         pages = nil,
         theme = nil,
@@ -72,6 +74,7 @@ function ui:CreateWindow(options)
     screenGui.DisplayOrder = 1000
     screenGui.IgnoreGuiInset = true
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    ui._internal.screenGui = screenGui
 
     local frame = Instance.new("CanvasGroup")
     frame.Name = "MainFrame"
@@ -83,6 +86,7 @@ function ui:CreateWindow(options)
     frame.Parent = screenGui
     frame.ClipsDescendants = true
     frame.GroupTransparency = 0
+    ui._internal.mainFrame = frame
 
     local uiScale = Instance.new("UIScale")
     uiScale.Scale = 1
@@ -372,12 +376,14 @@ function ui:CreateWindow(options)
             animStyle = ui.flags["close_animation_style"][1]
         end
 
+        local currentTrans = (ui.flags["ui_transparency_enabled"] and 0.35) or 0
+
         if visible then
             isAnimating = true
             frame.Visible = true
             
             if animStyle == "Scale" then
-                frame.GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0
+                frame.GroupTransparency = currentTrans
                 uiScale.Scale = 0
                 local t = TweenService:Create(uiScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})
                 t:Play()
@@ -385,12 +391,12 @@ function ui:CreateWindow(options)
             elseif animStyle == "Fade" then
                 uiScale.Scale = 1
                 frame.GroupTransparency = 1
-                local t = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0})
+                local t = TweenService:Create(frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = currentTrans})
                 t:Play()
                 t.Completed:Connect(function() isAnimating = false end)
             else
                 uiScale.Scale = 1
-                frame.GroupTransparency = ui.flags["ui_transparency_enabled"] and 0.35 or 0
+                frame.GroupTransparency = currentTrans
                 isAnimating = false
             end
         else
@@ -591,8 +597,8 @@ function ui:SaveConfig()
     local config = ui._internal.config
     if not config or not config.SaveConfig then return end
 
-    local mainFrame = CoreGui:FindFirstChild(config.Name .. "_Gui") and CoreGui[config.Name .. "_Gui"]:FindFirstChild("MainFrame")
-    local floatIcon = CoreGui:FindFirstChild(config.Name .. "_Gui") and CoreGui[config.Name .. "_Gui"]:FindFirstChild("FloatingIcon")
+    local mainFrame = ui._internal.mainFrame
+    local floatIcon = ui._internal.screenGui and ui._internal.screenGui:FindFirstChild("FloatingIcon")
     
     if not mainFrame or not floatIcon then return end
 
@@ -619,12 +625,8 @@ function ui:LoadConfig()
     if not config then return end
 
     local filePath = (config.SaveFolder ~= "" and config.SaveFolder .. "/" or "") .. config.SaveFile
-
-    local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
-    if not gui then return end
-
-    local mainFrame = gui:FindFirstChild("MainFrame")
-    local floatIcon = gui:FindFirstChild("FloatingIcon")
+    local mainFrame = ui._internal.mainFrame
+    local floatIcon = ui._internal.screenGui and ui._internal.screenGui:FindFirstChild("FloatingIcon")
 
     if readfile and isfile and isfile(filePath) then
         local success, result = pcall(function()
@@ -661,11 +663,7 @@ end
 
 function ui:SetTransparency(enabled)
     ui.flags["ui_transparency_enabled"] = enabled
-    local config = ui._internal.config
-    if not config then return end
-    
-    local gui = CoreGui:FindFirstChild(config.Name .. "_Gui")
-    local mainFrame = gui and gui:FindFirstChild("MainFrame")
+    local mainFrame = ui._internal.mainFrame
     if mainFrame then
         local target = enabled and 0.35 or 0
         TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {GroupTransparency = target}):Play()
@@ -679,7 +677,6 @@ function ui:CreateTab(name)
     local theme = ui._internal.theme
     local tablistIndex = #tabList:GetChildren() + 1
 
-    -- สร้างตัวแปรสีเทาสว่างสำหรับปุ่ม Tab ที่ยังไม่ได้ถูกเลือก (มองเห็นชัดกว่าเดิมมาก)
     local unselectedTextColor = Color3.fromRGB(165, 170, 180) 
 
     local button = Instance.new("TextButton")
@@ -688,7 +685,7 @@ function ui:CreateTab(name)
     button.BackgroundTransparency = 1
     button.Text = name
     button.TextSize = 14
-    button.TextColor3 = unselectedTextColor -- เปลี่ยนจาก theme.Sub เป็นสีเทาสว่าง
+    button.TextColor3 = unselectedTextColor
     button.Font = Enum.Font.GothamSemibold
     button.LayoutOrder = tablistIndex
     button.ZIndex = 6
@@ -725,7 +722,7 @@ function ui:CreateTab(name)
 
     button.MouseButton1Click:Connect(function()
         if ui._internal.selectedButton then
-            ui._internal.selectedButton.TextColor3 = unselectedTextColor -- คืนค่าสีเทาสว่างเมื่อปุ่มนี้ไม่ได้ถูกเลือกแล้ว
+            ui._internal.selectedButton.TextColor3 = unselectedTextColor
             ui._internal.selectedButton.BackgroundTransparency = 1
             if ui._internal.selectedPage then ui._internal.selectedPage.Visible = false end
         end
@@ -917,7 +914,7 @@ function ui:CreateTab(name)
         sliderBar.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 isSliding = true
-                local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+                local mainFrame = ui._internal.mainFrame
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = true end
                 activateSlide(input)
             end
@@ -932,7 +929,7 @@ function ui:CreateTab(name)
         UserInputService.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 isSliding = false
-                local mainFrame = CoreGui[ui._internal.config.Name .. "_Gui"]:FindFirstChild("MainFrame")
+                local mainFrame = ui._internal.mainFrame
                 if mainFrame and mainFrame:FindFirstChild("ModalBypass") then mainFrame.ModalBypass.Modal = false end
                 ui:SaveConfig()
             end
