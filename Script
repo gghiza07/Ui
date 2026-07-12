@@ -66,10 +66,10 @@ local SelectedCraftItem = "None"
 local SelectedFarmItem = "None"
 local SelectedBoss = "None"
 local SelectedSummonBoss = "GooGooGaaGaa"
-local ItemFarmLimit = 10
+local ItemFarmLimit = 100
 local FarmingBeliForCraft = false
 local FarmPosition = "Above"
-local FarmDistance = 4
+local FarmDistance = 6
 
 local CraftFarmItem = "None"
 local CraftFarmLimit = 0
@@ -251,17 +251,35 @@ local function parseNumberString(text)
     local num = tonumber(numStr) or 0
     
     local upperText = string.upper(cleanText)
-    if string.find(upperText, "T") then
+    if string.find(upperText, "Qd") then
+        num = num * 1000000000000000
+    elseif string.find(upperText, "T") then
         num = num * 1000000000000
     elseif string.find(upperText, "B") then
         num = num * 1000000000
     elseif string.find(upperText, "M") then
-        num = num * 1000
+        num = num * 1000000
     elseif string.find(upperText, "K") then
         num = num * 1000
     end
     
     return math.floor(num + 0.5)
+end
+
+local function formatNumber(num)
+    if not num then return "0" end
+    if num >= 1000000000000000 then
+        return string.format("%.2f", num / 1000000000000000):gsub("*%.?0+$", "") .. "Qd"
+    elseif num >= 1000000000000 then
+        return string.format("%.2f", num / 1000000000000):gsub("%.?0+$", "") .. "T"
+    elseif num >= 1000000000 then
+        return string.format("%.2f", num / 1000000000):gsub("%.?0+$", "") .. "B"
+    elseif num >= 1000000 then
+        return string.format("%.2f", num / 1000000):gsub("%.?0+$", "") .. "M"
+    elseif num >= 1000 then
+        return string.format("%.2f", num / 1000):gsub("%.?0+$", "") .. "K"
+    end
+    return tostring(num)
 end
 
 local function getBeliAmount()
@@ -494,13 +512,16 @@ local function updateDashboardUI()
         lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Parent = itemFrame
+    
+        local currentStr = formatNumber(currentAmt)
+        local neededStr = formatNumber(neededAmt)
         
         if missingAmt == 0 then
-            lbl.Text = "🟢 " .. matName .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.Text = "🟢 " .. matName .. " (" .. currentStr .. "/" .. neededStr .. ")"
             lbl.TextColor3 = Color3.fromRGB(80, 240, 120)
             cardStroke.Color = Color3.fromRGB(40, 100, 60)
         else
-            lbl.Text = "🔴 " .. matName .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.Text = "🔴 " .. matName .. " (" .. currentStr .. "/" .. neededStr .. ")"
             lbl.TextColor3 = Color3.fromRGB(255, 110, 110)
             cardStroke.Color = Color3.fromRGB(110, 45, 45)
         end
@@ -910,6 +931,11 @@ Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
         startSummonLoop()
     end
 end)
+Tab2:AddButton("Summon Boss Selected", function()
+    if SelectedSummonBoss ~= "None" then
+        NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
+    end
+end)
 Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
 Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
     getgenv().AutoFarmBoss = v
@@ -948,7 +974,7 @@ Tab3:AddSection("Item Farm")
 local farmItemList = {"None"}
 for _, data in pairs(ItemDatabase) do for _, itemName in ipairs(data.Items) do if not table.find(farmItemList, itemName) then table.insert(farmItemList, itemName) end end end
 Tab3:Dropdown("Select Item to Farm", "Dropdown_FarmItem", farmItemList, "None", false, function(v) SelectedFarmItem = v end)
-Tab3:AddSlider("Farming Item Limit", "Slider_ItemLimit", 1, 1000, 10, function(v) ItemFarmLimit = tonumber(v) or 10 end)
+Tab3:AddSlider("Farming Item Limit", "Slider_ItemLimit", 1, 10000, 10, function(v) ItemFarmLimit = tonumber(v) or 10 end)
 Tab3:AddToggle("Auto Farm Item", "Toggle_AutoFarmItem", false, function(v)
     getgenv().AutoFarmItem = v
     if v then
