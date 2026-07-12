@@ -876,7 +876,7 @@ Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
 end)
 
 Tab2:AddSection("Skills")
-Tab2:AddToggle("Master Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
+Tab2:AddToggle("Default Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
 Tab2:AddToggle("Z", "SkillZ", false, function(v) getgenv().AutoSkillZ = v end)
 Tab2:AddToggle("X", "SkillX", false, function(v) getgenv().AutoSkillX = v end)
 Tab2:AddToggle("C", "SkillC", false, function(v) getgenv().AutoSkillC = v end)
