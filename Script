@@ -859,11 +859,6 @@ Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
         startSummonLoop()
     end
 end)
-Tab2:AddButton("Summon Boss Selected", function()
-    if SelectedSummonBoss ~= "None" then
-        NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
-    end
-end)
 Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
 Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
     getgenv().AutoFarmBoss = v
