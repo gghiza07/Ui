@@ -1,4 +1,4 @@
-local CoreGui = game:GetService("CoreGui")
+Local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService") 
@@ -12,8 +12,8 @@ local Camera = workspace.CurrentCamera
 local ui = {
     flags = {},
     _internal = {
-        screenGui = nil, -- เพิ่มเพื่อเก็บ Object ตรงๆ ไม่ให้หลุดพาธ
-        mainFrame = nil, -- เพิ่มเพื่อล็อกตัว Frame หลักไว้จัดการ Transparency
+        screenGui = nil,
+        mainFrame = nil,
         tabList = nil,
         pages = nil,
         theme = nil,
@@ -30,7 +30,7 @@ function ui:CreateWindow(options)
         return string.gsub(str, "[^%w%s%-_]", "")
     end
     
-    local mapName = options.Map or "Unknow map"
+    local mapName = options.Map or "Unknown map"
     local saveFile = (options.Save and options.Save.SaveFile ~= "" and options.Save.SaveFile) or (sanitize(mapName) .. ".json")
     
     local config = {
@@ -51,6 +51,12 @@ function ui:CreateWindow(options)
             Sub = Color3.fromRGB(26, 28, 32)
         }
     }
+    
+    if options.Theme then
+        for key, color in pairs(options.Theme) do
+            if config.Theme[key] then config.Theme[key] = color end
+        end
+    end
     
     if options.Save then
         config.SaveConfig = options.Save.SaveConfig ~= nil and options.Save.SaveConfig or config.SaveConfig
@@ -587,6 +593,22 @@ function ui:CreateWindow(options)
     ui:LoadConfig()
 
     local windowObj = {}
+    
+    function windowObj:UpdateDesign(newTitle, newLogo, newMap, newAccent)
+        if newTitle then title.Text = newTitle end
+        if newLogo then logo.Text = newLogo end
+        if newMap then mapLabel.Text = newMap end
+        if newAccent then
+            config.Theme.Accent = newAccent
+            logo.TextColor3 = newAccent
+            mainAccent.BackgroundColor3 = newAccent
+            if floatStroke then floatStroke.Color = newAccent end
+            for _, p in pairs(pages:GetChildren()) do
+                if p:IsA("ScrollingFrame") then p.ScrollBarImageColor3 = newAccent end
+            end
+        end
+    end
+
     function windowObj:CreateTab(name)
         return ui:CreateTab(name)
     end
@@ -724,6 +746,12 @@ function ui:CreateTab(name)
         if ui._internal.selectedButton then
             ui._internal.selectedButton.TextColor3 = unselectedTextColor
             ui._internal.selectedButton.BackgroundTransparency = 1
+            
+            local oldBg = ui._internal.selectedButton:FindFirstChild("ButtonBackground")
+            if oldBg then
+                TweenService:Create(oldBg, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+            end
+            
             if ui._internal.selectedPage then ui._internal.selectedPage.Visible = false end
         end
         button.TextColor3 = theme.Text
@@ -1095,7 +1123,7 @@ function ui:CreateTab(name)
         searchBox.TextSize = 12
         searchBox.ZIndex = 11
         searchBox.ClearTextOnFocus = false
-        searchBox.Parent = searchBox.Parent
+        searchBox.Parent = searchWrapper 
 
         local function updateMainLabel(arrow)
             arrow = arrow or "▼"
