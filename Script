@@ -160,6 +160,7 @@ local DashFrame = Instance.new("Frame")
 local DashTitle = Instance.new("TextLabel")
 local DashScroll = Instance.new("ScrollingFrame")
 local DashListLayout = Instance.new("UIListLayout")
+local DashPadding = Instance.new("UIPadding")
 
 DashGui.Name = "Dashboard"
 DashGui.Parent = CoreGui
@@ -168,35 +169,57 @@ DashGui.Enabled = false
 
 DashFrame.Name = "DashFrame"
 DashFrame.Parent = DashGui
-DashFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+DashFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 DashFrame.BorderSizePixel = 0
 DashFrame.Position = UDim2.new(0.75, 0, 0.3, 0)
-DashFrame.Size = UDim2.new(0, 240, 0, 200)
+DashFrame.Size = UDim2.new(0, 260, 0, 240)
 DashFrame.Active = true
 DashFrame.Draggable = true
 
+local MainCorner = Instance.new("UICorner", DashFrame)
+MainCorner.CornerRadius = UDim.new(0, 10)
+
+local MainStroke = Instance.new("UIStroke", DashFrame)
+MainStroke.Color = Color3.fromRGB(45, 45, 60)
+MainStroke.Thickness = 1.5
+
 DashTitle.Name = "DashTitle"
 DashTitle.Parent = DashFrame
-DashTitle.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+DashTitle.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 DashTitle.BorderSizePixel = 0
-DashTitle.Size = UDim2.new(1, 0, 0, 30)
-DashTitle.Font = Enum.Font.SourceSansBold
-DashTitle.Text = "CRAFT TRACKER"
+DashTitle.Size = UDim2.new(1, 0, 0, 38)
+DashTitle.Font = Enum.Font.GothamBold
+DashTitle.Text = "📊 CRAFT TRACKER"
 DashTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-DashTitle.TextSize = 14
+DashTitle.TextSize = 13
+
+local TitleCorner = Instance.new("UICorner", DashTitle)
+TitleCorner.CornerRadius = UDim.new(0, 10)
+
+local TitleLine = Instance.new("Frame", DashTitle)
+TitleLine.Size = UDim2.new(1, 0, 0, 2)
+TitleLine.Position = UDim2.new(0, 0, 1, -2)
+TitleLine.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+TitleLine.BorderSizePixel = 0
 
 DashScroll.Name = "DashScroll"
 DashScroll.Parent = DashFrame
 DashScroll.BackgroundTransparency = 1
 DashScroll.BorderSizePixel = 0
-DashScroll.Position = UDim2.new(0, 5, 0, 35)
-DashScroll.Size = UDim2.new(1, -10, 1, -40)
+DashScroll.Position = UDim2.new(0, 0, 0, 42)
+DashScroll.Size = UDim2.new(1, 0, 1, -47)
 DashScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-DashScroll.ScrollBarThickness = 4
+DashScroll.ScrollBarThickness = 3
+DashScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
 
 DashListLayout.Parent = DashScroll
 DashListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-DashListLayout.Padding = UDim.new(0, 4)
+DashListLayout.Padding = UDim.new(0, 6)
+
+DashPadding.Parent = DashScroll
+DashPadding.PaddingLeft = UDim.new(0, 8)
+DashPadding.PaddingRight = UDim.new(0, 8)
+DashPadding.PaddingTop = UDim.new(0, 4)
 
 local function Level()
     local hud = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("HUD")
@@ -233,7 +256,7 @@ local function parseNumberString(text)
     elseif string.find(upperText, "B") then
         num = num * 1000000000
     elseif string.find(upperText, "M") then
-        num = num * 1000000
+        num = num * 1000
     elseif string.find(upperText, "K") then
         num = num * 1000
     end
@@ -260,21 +283,9 @@ local function findMobByItem(itemName)
     return nil, nil
 end
 
-local function getItemAmount(itemName)
-    local amount = 0
-    pcall(function()
-        local inventory = LocalPlayer.PlayerGui.HUD.Main.Frame_Inventory.Handler.InventoryHandler.ScrollingFrame
-        local itemObj = inventory:FindFirstChild(itemName)
-        if itemObj and itemObj.Main:FindFirstChild("Amount") then
-            amount = parseNumberString(itemObj.Main.Amount.Text)
-        end
-    end)
-    return amount
-end
-
 local function checkOwnedItem(itemName)
     if not itemName or itemName == "None" then return false end
-    if LocalPlayer.Backpack:FindFirstChild(itemName) or LocalPlayer.Character:FindFirstChild(itemName) then return true end
+    if LocalPlayer.Backpack:FindFirstChild(itemName) or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild(itemName)) then return true end
     local isOwned = false
     pcall(function()
         if LocalPlayer.PlayerGui.HUD.Main.Frame_Inventory.Handler.InventoryHandler.ScrollingFrame:FindFirstChild(itemName) then
@@ -282,6 +293,32 @@ local function checkOwnedItem(itemName)
         end
     end)
     return isOwned
+end
+
+local function getItemAmount(itemName)
+    local amount = 0
+    pcall(function()
+        local inventory = LocalPlayer.PlayerGui.HUD.Main.Frame_Inventory.Handler.InventoryHandler.ScrollingFrame
+        local itemObj = inventory:FindFirstChild(itemName)
+        
+        if itemObj then
+            local amountObj = itemObj:FindFirstChild("Amount") or (itemObj:FindFirstChild("Main") and itemObj.Main:FindFirstChild("Amount"))
+            if amountObj then
+                local text = amountObj.Text
+                if string.find(text, "Lv") or string.find(text, "Lv%.") then
+                    amount = 1 
+                else
+                    amount = parseNumberString(text)
+                end
+            end
+        end
+    end)
+    
+    if amount == 0 and checkOwnedItem(itemName) then
+        return 1
+    end
+    
+    return amount
 end
 
 local function getAvailableWeapons()
@@ -403,19 +440,19 @@ end
 
 local function updateDashboardUI()
     for _, child in ipairs(DashScroll:GetChildren()) do
-        if child:IsA("TextLabel") then child:Destroy() end
+        if child:IsA("Frame") or child:IsA("TextLabel") then child:Destroy() end
     end
     
     if SelectedCraftItem == "None" or checkOwnedItem(SelectedCraftItem) then
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 0, 25)
+        lbl.Size = UDim2.new(1, 0, 0, 50)
         lbl.BackgroundTransparency = 1
-        lbl.Font = Enum.Font.SourceSans
-        lbl.Text = SelectedCraftItem == "None" and "Please Select Item to Craft" or "Item Already Crafted!"
-        lbl.TextColor3 = Color3.fromRGB(150, 150, 150)
-        lbl.TextSize = 14
+        lbl.Font = Enum.Font.GothamMedium
+        lbl.Text = SelectedCraftItem == "None" and "📋 Please Select Item to Craft" or "✨ Item Already Crafted! ✨"
+        lbl.TextColor3 = Color3.fromRGB(150, 155, 170)
+        lbl.TextSize = 13
         lbl.Parent = DashScroll
-        DashScroll.CanvasSize = UDim2.new(0, 0, 0, 25)
+        DashScroll.CanvasSize = UDim2.new(0, 0, 0, 50)
         return
     end
 
@@ -438,24 +475,38 @@ local function updateDashboardUI()
         local missingAmt = neededAmt - currentAmt
         if missingAmt < 0 then missingAmt = 0 end
         
+        local itemFrame = Instance.new("Frame")
+        itemFrame.Size = UDim2.new(1, -4, 0, 36)
+        itemFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+        itemFrame.BorderSizePixel = 0
+        
+        local cardCorner = Instance.new("UICorner", itemFrame)
+        cardCorner.CornerRadius = UDim.new(0, 6)
+        
+        local cardStroke = Instance.new("UIStroke", itemFrame)
+        cardStroke.Thickness = 1
+        
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 0, 25)
-        lbl.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-        lbl.BorderSizePixel = 0
-        lbl.Font = Enum.Font.SourceSans
+        lbl.Size = UDim2.new(1, -15, 1, 0)
+        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.GothamSemibold
+        lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Parent = itemFrame
         
         if missingAmt == 0 then
-            lbl.Text = "  " .. matName .. ": DONE (" .. currentAmt .. "/" .. neededAmt .. ")"
-            lbl.TextColor3 = Color3.fromRGB(50, 220, 50)
+            lbl.Text = "🟢 " .. matName .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.TextColor3 = Color3.fromRGB(80, 240, 120)
+            cardStroke.Color = Color3.fromRGB(40, 100, 60)
         else
-            lbl.Text = "  " .. matName .. ": Need " .. missingAmt .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
-            lbl.TextColor3 = Color3.fromRGB(220, 50, 50)
+            lbl.Text = "🔴 " .. matName .. " (" .. currentAmt .. "/" .. neededAmt .. ")"
+            lbl.TextColor3 = Color3.fromRGB(255, 110, 110)
+            cardStroke.Color = Color3.fromRGB(110, 45, 45)
         end
         
-        lbl.TextSize = 13
-        lbl.Parent = DashScroll
-        totalHeight = totalHeight + 29
+        itemFrame.Parent = DashScroll
+        totalHeight = totalHeight + 42
     end
     
     DashScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
@@ -857,11 +908,6 @@ Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
     getgenv().AutoSummonBoss = v
     if v then
         startSummonLoop()
-    end
-end)
-Tab2:AddButton("Summon Boss Selected", function()
-    if SelectedSummonBoss ~= "None" then
-        NetworkEvent:FireServer("fire", nil, "SummonBoss", SelectedSummonBoss)
     end
 end)
 Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
