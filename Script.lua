@@ -3,7 +3,7 @@ local ui = loadstring(game:HttpGet("https://cdn.jsdelivr.net/gh/gghiza07/Ui@4a6b
 local Window = ui:CreateWindow({
     Name = "Wiv Hub",
     Map = "Rock Fruit",
-    Text = "v0.0.2",
+    Text = "v0.0.21",
     Save = {
         SaveConfig = true,
         SaveFolder = "Wiv hub",
@@ -56,7 +56,7 @@ getgenv().AutoSkillX = false
 getgenv().AutoSkillC = false
 getgenv().AutoSkillV = false
 getgenv().ShowDashboard = false
-getgenv().IsTransitioning = false
+getgenv().TransitionUntil = 0
 
 local SelectedStat = {"Melee"}
 local SelectedWeapon = "None"
@@ -395,6 +395,17 @@ local function autoDetectType(itemName)
     return "Melee"
 end
 
+local function getNpcObject(npcName)
+    if not npcName then return nil end
+    if workspace:FindFirstChild("NpcQuest") and workspace.NpcQuest:FindFirstChild(npcName) then
+        return workspace.NpcQuest[npcName]
+    end
+    if workspace:FindFirstChild("NpcWeapon") and workspace.NpcWeapon:FindFirstChild(npcName) then
+        return workspace.NpcWeapon[npcName]
+    end
+    return workspace:FindFirstChild(npcName)
+end
+
 local function getAllMissingMaterials(itemName, list)
     list = list or {}
     if checkOwnedItem(itemName) then return list end
@@ -413,7 +424,17 @@ local function getAllMissingMaterials(itemName, list)
             else
                 local currentAmt = getItemAmount(mat)
                 if currentAmt < needed then
-                    table.insert(list, {Name = mat, Needed = needed, Current = currentAmt})
+                    local found = false
+                    for _, item in ipairs(list) do
+                        if item.Name == mat then
+                            item.Needed = item.Needed + needed
+                            found = true
+                            break
+                        end
+                    end
+                    if not found then
+                        table.insert(list, {Name = mat, Needed = needed, Current = currentAmt})
+                    end
                 end
             end
         end
@@ -426,33 +447,33 @@ local function getCurrentCraftTarget(itemName)
     local recipeData = CraftDatabase[itemName]
     if not recipeData then return nil end
     
-    local missing = getAllMissingMaterials(itemName)
+    local mats = recipeData.Materials
+    if not mats then return nil end
     
-    if #missing > 0 then
-        local FolderMon = workspace:FindFirstChild("Mob") or workspace
-        for _, matData in ipairs(missing) do
-            local mobName, npcName = findMobByItem(matData.Name)
-            if mobName then
-                for _, m in ipairs(FolderMon:GetChildren()) do
-                    if m.Name == mobName and m:FindFirstChildOfClass("Humanoid") and m.Humanoid.Health > 0 and m:FindFirstChild("HumanoidRootPart") then
-                        if m.HumanoidRootPart.Position.Y > -500 then
-                            return "farm", matData.Name, matData.Needed
-                        end
-                    end
+    for mat, needed in pairs(mats) do
+        if mat ~= "Beli" and CraftDatabase[mat] then
+            if not checkOwnedItem(mat) then
+                local subAction, subTarget, subAmt = getCurrentCraftTarget(mat)
+                if subAction then
+                    return subAction, subTarget, subAmt
                 end
             end
         end
-        
-        local firstMissing = missing[1]
-        return "farm", firstMissing.Name, firstMissing.Needed
     end
     
-    local mats = recipeData.Materials
-    local beliNeeded = mats and mats["Beli"] or 0
-    if getBeliAmount() < beliNeeded then 
-        return "beli", "Beli", beliNeeded 
+    for mat, needed in pairs(mats) do
+        if mat ~= "Beli" and not CraftDatabase[mat] then
+            local currentAmt = getItemAmount(mat)
+            if currentAmt < needed then
+                return "farm", mat, needed
+            end
+        end
     end
     
+    local beliNeeded = mats["Beli"] or 0
+    if getBeliAmount() < beliNeeded then
+        return "beli", "Beli", beliNeeded
+    end
     return "craft", itemName, 1
 end
 
@@ -533,21 +554,34 @@ local function updateDashboardUI()
     DashScroll.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
 end
 
+local function setTransition(duration)
+    getgenv().TransitionUntil = os.clock() + (duration or 0.3)
+end
+
+local function isTransitioning()
+    return getgenv().TransitionUntil and os.clock() < getgenv().TransitionUntil
+end
+
 local function executeCraftingCheck()
     if not getgenv().AutoCraft or SelectedCraftItem == "None" then
         FarmingBeliForCraft = false
         CraftFarmItem = "None"
         return
     end
-
+    
     if checkOwnedItem(SelectedCraftItem) then
         FarmingBeliForCraft = false
         CraftFarmItem = "None"
-        getgenv().AutoCraft = false
         return
     end
 
     local actionType, targetName, amountNeeded = getCurrentCraftTarget(SelectedCraftItem)
+
+    if not actionType then
+        FarmingBeliForCraft = false
+        CraftFarmItem = "None"
+        return
+    end
 
     if actionType == "beli" then
         FarmingBeliForCraft = true
@@ -561,11 +595,7 @@ local function executeCraftingCheck()
         CraftFarmItem = "None"
         TargetMob = nil
         NetworkEvent:FireServer("fire", nil, "Craft", targetName, autoDetectType(targetName))
-        task.wait(0.5)
-    elseif actionType == "unfarmable" then
-        FarmingBeliForCraft = false
-        CraftFarmItem = "None"
-        getgenv().AutoCraft = false 
+        task.wait(0.8)
     end
 end
 
@@ -619,27 +649,26 @@ local function executeFarmingCycle()
         if questFrame and questFrame.Visible and questFrame:FindFirstChild("Title") then
             local questTitle = questFrame.Title.Text
             if not string.find(questTitle, Mon) then
-                getgenv().IsTransitioning = true
+                setTransition(0.5)
                 TargetMob = nil
                 NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
                 questFrame.Visible = false
                 task.wait(0.3)
-                getgenv().IsTransitioning = false
             end
         end
 
         if currentTier ~= tierIndex then
-            getgenv().IsTransitioning = true
+            setTransition(0.3)
             TargetMob = nil
+            lastMobTime = 0 
             NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
             if LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_Quest") then LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible = false end
             task.wait(0.3)
             currentTier = tierIndex
-            getgenv().IsTransitioning = false
         end
 
         local hasQuest = LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible
-        local npc = Npc and workspace:FindFirstChild("NpcQuest") and workspace.NpcQuest:FindFirstChild(Npc)
+        local npc = Npc and getNpcObject(Npc)
         
         local shouldAcceptQuest = false
         if tierIndex == "Level_Farm" or tierIndex == "Beli_Farm_Level" then
@@ -647,7 +676,7 @@ local function executeFarmingCycle()
         end
         
         if shouldAcceptQuest and not hasQuest and npc and npc:FindFirstChild("HumanoidRootPart") then
-            getgenv().IsTransitioning = true
+            setTransition(1.0)
             TargetMob = nil
             character.Humanoid.PlatformStand = true
             character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
@@ -670,7 +699,6 @@ local function executeFarmingCycle()
                     end
                 end
             end
-            getgenv().IsTransitioning = false
             return
         end
 
@@ -732,8 +760,8 @@ local function startMainFarmLoop()
     if farmThread then return end
     farmThread = task.spawn(function()
         while getgenv().Autofarm or getgenv().AutoFarmItem or getgenv().AutoCraft or getgenv().AutoFarmBoss do
-            executeFarmingCycle()
-            task.wait(0.05)
+            pcall(executeFarmingCycle)
+            task.wait(0.1)
         end
         TargetMob = nil
         currentTier = nil
@@ -745,8 +773,8 @@ local function startCraftLoop()
     if craftThread then return end
     craftThread = task.spawn(function()
         while getgenv().AutoCraft do
-            executeCraftingCheck()
-            task.wait(0.1)
+            pcall(executeCraftingCheck)
+            task.wait(0.2)
         end
         FarmingBeliForCraft = false
         CraftFarmItem = "None"
@@ -819,7 +847,8 @@ RunService.Heartbeat:Connect(function()
         character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0) 
         return
     end
-    if getgenv().IsTransitioning then
+    
+    if isTransitioning() then
         character.Humanoid.PlatformStand = true
         character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
         character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
@@ -849,29 +878,36 @@ RunService.Heartbeat:Connect(function()
                 workspace.CurrentCamera.CameraSubject = TargetMob.Humanoid
                 return
             else
-                character.Humanoid.PlatformStand = true
-                character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
-                character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
-
-                if os.clock() - lastMobTime < spawnDelayThreshold then
-                    if workspace.CurrentCamera.CameraSubject ~= character.Humanoid then
-                        workspace.CurrentCamera.CameraSubject = character.Humanoid
-                    end
-                    return
-                end
-
                 local Mon, Npc, tierIndex = determineFarmTarget()
                 if Mon and Npc then
-                    local hasQuest = false
-                    pcall(function() hasQuest = LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible end)
-                    local shouldAcceptQuest = (tierIndex == "Level_Farm" or tierIndex == "Beli_Farm_Level")
-                    
-                    if not hasQuest and shouldAcceptQuest then
-                        local npcObj = workspace:FindFirstChild("NpcQuest") and workspace.NpcQuest:FindFirstChild(Npc)
-                        if npcObj and npcObj:FindFirstChild("HumanoidRootPart") then
+                    character.Humanoid.PlatformStand = true
+                    character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                    character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
+
+                    if os.clock() - lastMobTime < spawnDelayThreshold then
+                        if workspace.CurrentCamera.CameraSubject ~= character.Humanoid then
+                            workspace.CurrentCamera.CameraSubject = character.Humanoid
+                        end
+                        return
+                    end
+
+                    local npcObj = getNpcObject(Npc)
+                    if npcObj and npcObj:FindFirstChild("HumanoidRootPart") then
+                        local hasQuest = false
+                        pcall(function() hasQuest = LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Visible end)
+                        local shouldAcceptQuest = (tierIndex == "Level_Farm" or tierIndex == "Beli_Farm_Level")
+                        
+                        if (shouldAcceptQuest and not hasQuest) or (tierIndex and (tierIndex:find("CraftItem_") or tierIndex:find("ManualItem_"))) then
                             local aboveNpcPos = npcObj.HumanoidRootPart.Position + Vector3.new(0, 15, 0)
                             character.HumanoidRootPart.CFrame = CFrame.new(aboveNpcPos) * CFrame.Angles(0, math.rad(180), 0)
                         end
+                    end
+                else
+                    if character.Humanoid.PlatformStand then 
+                        character.Humanoid.PlatformStand = false 
+                    end
+                    if workspace.CurrentCamera.CameraSubject ~= character.Humanoid then 
+                        workspace.CurrentCamera.CameraSubject = character.Humanoid 
                     end
                 end
                 
@@ -898,7 +934,7 @@ local Tab4 = Window:CreateTab("Stats")
 local Tab5 = Window:CreateTab("Settings")
 
 Tab1:AddSection("Level Farming")
-Tab1:AddToggle("Auto Farm Level", "Toggle_Autofarm", false, function(v)
+Tab1:AddToggle("Auto Farm Level", "Autofarm", false, function(v)
     getgenv().Autofarm = v
     if v then
         startMainFarmLoop()
@@ -907,24 +943,24 @@ Tab1:AddToggle("Auto Farm Level", "Toggle_Autofarm", false, function(v)
 end)
 
 Tab1:AddSection("Rebirth")
-Tab1:AddToggle("Auto Rebirth", "Toggle_AutoRebirth", false, function(v)
+Tab1:AddToggle("Auto Rebirth", "AutoRebirth", false, function(v)
     getgenv().AutoRebirth = v
     if v then
         startRebirthLoop()
     end
 end)
 
-local WeaponDropdown = Tab1:Dropdown("Select Weapon", "Dropdown_Weapon", getAvailableWeapons(), "None", false, function(v) SelectedWeapon = v end)
+local WeaponDropdown = Tab1:Dropdown("Select Weapon", "Weapon", getAvailableWeapons(), "None", false, function(v) SelectedWeapon = v end)
 local function AutoRefreshWeapon() if WeaponDropdown and WeaponDropdown.Refresh then pcall(function() WeaponDropdown:Refresh(getAvailableWeapons()) end) end end
 LocalPlayer.Backpack.ChildAdded:Connect(AutoRefreshWeapon) LocalPlayer.Backpack.ChildRemoved:Connect(AutoRefreshWeapon)
 LocalPlayer.CharacterAdded:Connect(function(char) char.ChildAdded:Connect(AutoRefreshWeapon) char.ChildRemoved:Connect(AutoRefreshWeapon) end)
 
 Tab1:AddSection("Farming Method Settings")
-Tab1:Dropdown("Farm Position", "Dropdown_FarmPosition", {"Above", "Below", "Behind"}, "Above", false, function(v) FarmPosition = v end)
-Tab1:AddSlider("Farm Distance (Studs)", "Slider_FarmDistance", 1, 15, 4, function(v) FarmDistance = tonumber(v) or 4 end)
+Tab1:Dropdown("Farm Position", "FarmPosition", {"Above", "Below", "Behind"}, "Above", false, function(v) FarmPosition = v end)
+Tab1:AddSlider("Farm Distance (Studs)", "FarmDistance", 1, 30, 6, function(v) FarmDistance = tonumber(v) or 6 end)
 
 Tab1:AddSection("Boss Farm")
-Tab1:Dropdown("Select Boss to Summon", "Dropdown_SummonBoss", {"GooGooGaaGaa", "Dark Bacon"}, "GooGooGaaGaa", false, function(v) SelectedSummonBoss = v end)
+Tab1:Dropdown("Select Boss to Summon", "SummonBoss", {"GooGooGaaGaa", "Dark Bacon"}, "GooGooGaaGaa", false, function(v) SelectedSummonBoss = v end)
 Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
     getgenv().AutoSummonBoss = v
     if v then
@@ -932,7 +968,7 @@ Tab1:AddToggle("Auto Summon", "AutoSummonBoss", false, function(v)
     end
 end)
 Tab1:Dropdown("Select Boss Farm", "Dropdown_FarmBoss", {"None", "GooGooGaaGaa", "Dark Bacon"}, "None", false, function(v) SelectedBoss = v end)
-Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
+Tab1:AddToggle("Auto Farm Boss", "AutoFarm2", false, function(v)
     getgenv().AutoFarmBoss = v
     if v then
         startMainFarmLoop()
@@ -943,15 +979,15 @@ Tab1:AddToggle("Auto Farm Boss", "AutoFarmBoss", false, function(v)
 end)
 
 Tab2:AddSection("Skills")
-Tab2:AddToggle("Master Auto Skill", "Toggle_MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
+Tab2:AddToggle("Default Auto Skill", "MasterSkill", false, function(v) getgenv().AutoSkillMaster = v end)
 Tab2:AddToggle("Z", "SkillZ", false, function(v) getgenv().AutoSkillZ = v end)
 Tab2:AddToggle("X", "SkillX", false, function(v) getgenv().AutoSkillX = v end)
 Tab2:AddToggle("C", "SkillC", false, function(v) getgenv().AutoSkillC = v end)
 Tab2:AddToggle("V", "SkillV", false, function(v) getgenv().AutoSkillV = v end)
 
 Tab3:AddSection("Gacha")
-Tab3:Dropdown("Select Chest Amount", "Dropdown_ChestAmount", {"x5", "x10", "x15"}, "x5", false, function(v) ChestAmount = v end)
-Tab3:AddToggle("Auto Open Chest", "Toggle_AutoChest", false, function(v)
+Tab3:Dropdown("Select Chest Amount", "ChestAmount", {"x5", "x10", "x15"}, "x5", false, function(v) ChestAmount = v end)
+Tab3:AddToggle("Auto Open Chest", "AutoChest", false, function(v)
     getgenv().AutoChest = v
     if v then
         if chestThread then return end
@@ -968,9 +1004,9 @@ end)
 Tab3:AddSection("Item Farm")
 local farmItemList = {"None"}
 for _, data in pairs(ItemDatabase) do for _, itemName in ipairs(data.Items) do if not table.find(farmItemList, itemName) then table.insert(farmItemList, itemName) end end end
-Tab3:Dropdown("Select Item to Farm", "Dropdown_FarmItem", farmItemList, "None", false, function(v) SelectedFarmItem = v end)
-Tab3:AddSlider("Farming Item Limit", "Slider_ItemLimit", 1, 10000, 10, function(v) ItemFarmLimit = tonumber(v) or 10 end)
-Tab3:AddToggle("Auto Farm Item", "Toggle_AutoFarmItem", false, function(v)
+Tab3:Dropdown("Select Item to Farm", "ItemFarm", farmItemList, "None", false, function(v) SelectedFarmItem = v end)
+Tab3:AddSlider("Farming Item Limit", "ItemLimit", 1, 10000, 10, function(v) ItemFarmLimit = tonumber(v) or 10 end)
+Tab3:AddToggle("Auto Farm Item", "AutoFarmItem", false, function(v)
     getgenv().AutoFarmItem = v
     if v then
         startMainFarmLoop()
@@ -983,7 +1019,7 @@ end)
 Tab3:AddSection("Craft")
 local craftList = {"None"}
 for itemName, _ in pairs(CraftDatabase) do table.insert(craftList, itemName) end
-Tab3:Dropdown("Select Item to Craft", "Dropdown_CraftItem", craftList, "None", false, function(v) SelectedCraftItem = v end)
+Tab3:Dropdown("Select Item to Craft", "CraftItem", craftList, "None", false, function(v) SelectedCraftItem = v end)
 Tab3:AddToggle("Auto Craft Item", "AutoCraft", false, function(v)
     getgenv().AutoCraft = v
     if v then
@@ -1005,8 +1041,8 @@ Tab3:AddToggle("Craft Dashboard", "DashboardFrameShow", false, function(v)
 end)
 
 Tab4:AddSection("Status")
-Tab4:Dropdown("Select Status", "Dropdown_Stats", {"Melee", "Defense", "Sword", "Power"}, {"Melee"}, true, function(v) SelectedStat = v end)
-Tab4:AddSlider("Upgrade Amount (Slider)", "Slider_StatAmount", 1, 10000, 1, function(v) StatAmount = tonumber(v) or 1 end)
+Tab4:Dropdown("Select Status", "Stats", {"Melee", "Defense", "Sword", "Power"}, {"Melee"}, true, function(v) SelectedStat = v end)
+Tab4:AddSlider("Upgrade Amount (Slider)", "StatAmount", 1, 10000, 1, function(v) StatAmount = tonumber(v) or 1 end)
 Tab4:AddToggle("Auto Up Stats", "AutoStats", false, function(v)
     getgenv().AutoStats = v
     if v then
